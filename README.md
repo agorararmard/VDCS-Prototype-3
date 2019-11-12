@@ -1,8 +1,6 @@
-# VDCS-Prototype-2
-This is an experiment for milestone 2 using Go
+# VDCS-Prototype-3
+This is an experiment for milestone 3 using Go
 ## To Do:
- Ghazy Gouhar Ibra&Absha George
-
 ### Client:
 - All modifications in the VDCS.go library:
 - Request Cycle: Send circuit description(# of gates) to directory service

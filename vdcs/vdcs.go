@@ -2,10 +2,13 @@ package vdcs
 
 import (
 	"bytes"
+	"crypto"
 	"crypto/aes"
 	"crypto/cipher"
 	cryptoRand "crypto/rand"
+	"crypto/rsa"
 	"crypto/sha256"
+	"crypto/x509"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -13,6 +16,7 @@ import (
 	"log"
 	"math"
 	"math/rand"
+	"net"
 	"net/http"
 	"os"
 	"strconv"
@@ -73,9 +77,14 @@ type ResEval struct {
 }
 
 type PartyInfo struct {
-	IP        string `json:"IP"`
-	Port      string `json:"Port"`
+	IP        []byte `json:"IP"`
+	Port      int    `json:"Port"`
 	PublicKey []byte `json:"PublicKey"`
+}
+
+type MyInfo struct {
+	PartyInfo
+	PrivateKey []byte `json:"PrivateKey"`
 }
 
 type ServerCapabilities struct {
@@ -97,14 +106,24 @@ type ClientRegistration struct {
 
 type FunctionRegistration struct {
 	Token
-	ServerCapabilities //in this case we describe the capabilities needed to compute the circuit
+	NumberOfServers    int `json:"NumberOfServers"`
+	ServerCapabilities     //in this case we describe the capabilities needed to compute the circuit
+}
+
+type Cycle struct {
+	Cycle []PartyInfo `json:"Cycle"`
+}
+
+type CycleMessage struct {
+	Cycle
+	TotalFee int `json:"TotalFee"`
 }
 
 type Message struct {
+	Type string `json:"Type"` //Garble, Rerand, Eval
 	Circuit
 	GarbledMessage
 	InputWires []Wire `json:"InputWires"`
-	Type       string `json:"Type"` //Garble, Rerand, Eval
 	Randomness
 	ComID
 	NextServer PartyInfo `json:"NextServer"`
@@ -112,6 +131,11 @@ type Message struct {
 
 type MessageArray struct {
 	Array []Message `json:"Array"`
+}
+
+//GetCircuitSize get the number of gates in a circuit
+func GetCircuitSize(circ Circuit) int {
+	return len(circ.InputGates) + len(circ.MiddleGates) + len(circ.OutputGates)
 }
 
 //basically, the channel will need to send the input/output mapping as well
@@ -676,4 +700,152 @@ func Evaluate(gc GarbledMessage) (result ResEval) {
 	}
 
 	return
+}
+
+//Convert32BytesToByteStream receives a byte array returns the first 32 bytes from it
+func Convert32BytesToByteStream(msg [32]byte) []byte {
+	key := make([]byte, 32)
+	for jk, tmpo := range msg {
+		key[jk] = tmpo
+	}
+	return key
+}
+
+//SHA256Hash Hashes a byte array using sha256
+func SHA256Hash(msg []byte) [32]byte {
+	return sha256.Sum256(msg)
+}
+
+// GetIP getting The IP
+func GetIP() (net.IP, error) {
+	conn, err := net.Dial("udp", "8.8.8.8:80")
+
+	defer conn.Close()
+
+	localAddr := conn.LocalAddr().(*net.UDPAddr)
+
+	return localAddr.IP, err
+}
+
+// GetFreePort asks the kernel for a free open port that is ready to use.
+func GetFreePort() (int, error) {
+	addr, err := net.ResolveTCPAddr("tcp", "localhost:0")
+	if err != nil {
+		return 0, err
+	}
+
+	l, err := net.ListenTCP("tcp", addr)
+	if err != nil {
+		panic(err)
+	}
+	defer l.Close()
+	return l.Addr().(*net.TCPAddr).Port, nil
+}
+
+//RSAPublicEncrypt encrypts data with a given rsa.publickey
+func RSAPublicEncrypt(key *rsa.PublicKey, data []byte) ([]byte, error) {
+	return rsa.EncryptPKCS1v15(cryptoRand.Reader, key, data)
+}
+
+//RSAPrivateDecrypt decrypts encrypted data with a given rsa.privatekey
+func RSAPrivateDecrypt(key *rsa.PrivateKey, data []byte) ([]byte, error) {
+	return rsa.DecryptPKCS1v15(cryptoRand.Reader, key, data)
+}
+
+//GenerateRSAKey generates Public/Private Key pair, advised rsaKeySize = 2048
+func GenerateRSAKey(rsaKeySize int) (*rsa.PrivateKey, *rsa.PublicKey) {
+	if rsaKeySize < 1 {
+		rsaKeySize = 2048
+	}
+	pri, err := rsa.GenerateKey(cryptoRand.Reader, rsaKeySize)
+	if err != nil {
+		panic(err)
+	}
+	return pri, &pri.PublicKey
+}
+
+//RSAPublicKeyFromBytes extracts rsa.publickey from its byte array encoding
+func RSAPublicKeyFromBytes(key []byte) *rsa.PublicKey {
+	pk, err := x509.ParsePKCS1PublicKey(key)
+	if err != nil {
+		panic(err)
+	}
+	return pk
+}
+
+//BytesFromRSAPublicKey returns byte array encoding from an rsa.publickey
+func BytesFromRSAPublicKey(pk *rsa.PublicKey) []byte {
+	pubBytes := x509.MarshalPKCS1PublicKey(pk)
+	return pubBytes
+}
+
+//BytesFromRSAPrivateKey returns byte array encoding from an rsa.privatekey
+func BytesFromRSAPrivateKey(sk *rsa.PrivateKey) []byte {
+	priBytes, err := x509.MarshalPKCS8PrivateKey(sk)
+	if err != nil {
+		panic(err)
+	}
+	return priBytes
+}
+
+//RSAPrivateKeyFromBytes extracts rsa.privatekey from its byte array encoding
+func RSAPrivateKeyFromBytes(key []byte) *rsa.PrivateKey {
+	pri, err := x509.ParsePKCS8PrivateKey(key)
+	if err != nil {
+		panic(err)
+	}
+	p, ok := pri.(*rsa.PrivateKey)
+	if !ok {
+		panic("Invalid Key type")
+	}
+	return p
+}
+
+//RSAPrivateSign makes a signature with a private key
+func RSAPrivateSign(key *rsa.PrivateKey, data []byte) ([]byte, error) {
+	return rsa.SignPKCS1v15(cryptoRand.Reader, key, crypto.SHA256, Convert32BytesToByteStream(SHA256Hash(data)))
+}
+
+//RSAPrivateVerify verifies a signature made with a private key
+func RSAPrivateVerify(key *rsa.PrivateKey, sign, data []byte) error {
+	h, err := RSAPrivateDecrypt(key, sign)
+	if err != nil {
+		return err
+	}
+	if !bytes.Equal(h, Convert32BytesToByteStream(SHA256Hash(data))) {
+		return rsa.ErrVerification
+	}
+	return nil
+}
+
+//RSAPublicSign makes a signature with a public key
+func RSAPublicSign(key *rsa.PublicKey, data []byte) ([]byte, error) {
+	return RSAPublicEncrypt(key, Convert32BytesToByteStream(SHA256Hash(data)))
+}
+
+//RSAPublicVerify verifies a signature made with a public key
+func RSAPublicVerify(key *rsa.PublicKey, sign, data []byte) error {
+	return rsa.VerifyPKCS1v15(key, crypto.SHA256, Convert32BytesToByteStream(SHA256Hash(data)), sign)
+}
+
+//GetPartyInfo for a party to extract his own communication info
+func GetPartyInfo() (PartyInfo, []byte) {
+	port, err := GetFreePort()
+	if err != nil {
+		panic(err)
+	}
+	sk, pk := GenerateRSAKey(0)
+	if err != nil {
+		panic(err)
+	}
+	ip, err := GetIP()
+	if err != nil {
+		panic(err)
+	}
+	pI := PartyInfo{
+		IP:        ip,
+		Port:      port,
+		PublicKey: BytesFromRSAPublicKey(pk),
+	}
+	return pI, BytesFromRSAPrivateKey(sk)
 }
