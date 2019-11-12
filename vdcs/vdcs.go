@@ -95,19 +95,28 @@ type Token struct {
 	TokenGen []byte `json:"TokenGen"`
 }
 
-type ServerRegistration struct {
+type ServerInfo struct {
 	PartyInfo
 	ServerCapabilities
 }
 
-type ClientRegistration struct {
+type ClientInfo struct {
 	PartyInfo
 }
-
-type FunctionRegistration struct {
+type RegisterationMessage struct {
+	Type string `json:"Type"` //Server, Client
+	ServerInfo
+	ClientInfo
+}
+type FunctionInfo struct {
 	Token
 	NumberOfServers    int `json:"NumberOfServers"`
 	ServerCapabilities     //in this case we describe the capabilities needed to compute the circuit
+}
+
+//Wrapping In case we needed to add new request types for failure handling
+type CycleRequestMessage struct {
+	FunctionInfo
 }
 
 type Cycle struct {
