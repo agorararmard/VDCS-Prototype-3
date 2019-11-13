@@ -147,7 +147,7 @@ func GetCircuitSize(circ Circuit) int {
 	return len(circ.InputGates) + len(circ.MiddleGates) + len(circ.OutputGates)
 }
 
-//basically, the channel will need to send the input/output mapping as well
+//Comm basically, the channel will need to send the input/output mapping as well
 func Comm(cir string, cID int, chVDCSCommCircRes chan<- GarbledMessage) {
 	file, _ := ioutil.ReadFile(cir + ".json")
 	k := Circuit{}
@@ -207,6 +207,123 @@ func Comm(cir string, cID int, chVDCSCommCircRes chan<- GarbledMessage) {
 	}
 	//Send Circuit to channel
 	chVDCSCommCircRes <- gcm
+}
+
+//SendToServer Invokes the post method on the server
+func SendToServer(k MessageArray, ip []byte, port int) bool {
+	circuitJSON, err := json.Marshal(k)
+	req, err := http.NewRequest("POST", "http://"+string(ip)+":"+strconv.Itoa(port)+"/post", bytes.NewBuffer(circuitJSON))
+	if err != nil {
+		fmt.Println("generating request failed")
+	}
+	req.Header.Set("Content-Type", "application/json")
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	resp.Body.Close()
+	if err != nil {
+		//log.Fatal(err)
+		return false
+	}
+	return true
+}
+
+//GetFromServer Invokes the get method on the server
+func GetFromServer(tokenChallenge Token, ip []byte, port int) (token Token, ok bool) {
+	ok = false //assume failure
+	iDJSON, err := json.Marshal(tokenChallenge)
+	req, err := http.NewRequest("GET", "http://"+string(ip)+":"+strconv.Itoa(port)+"/get", bytes.NewBuffer(iDJSON))
+	req.Header.Set("Content-Type", "application/json")
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return
+	}
+	body, err := ioutil.ReadAll(resp.Body)
+	err = json.Unmarshal(body, &token)
+	if err != nil {
+		return
+	}
+	resp.Body.Close()
+	ok = true
+	return
+}
+
+//SendToDirectory Invokes the post method on the directory
+func SendToDirectory(k RegisterationMessage, ip []byte, port int) bool {
+	circuitJSON, err := json.Marshal(k)
+	req, err := http.NewRequest("POST", "http://"+string(ip)+":"+strconv.Itoa(port)+"/post", bytes.NewBuffer(circuitJSON))
+	if err != nil {
+		fmt.Println("generating request failed")
+	}
+	req.Header.Set("Content-Type", "application/json")
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	resp.Body.Close()
+	if err != nil {
+		//log.Fatal(err)
+		return false
+	}
+	return true
+}
+
+//GetFromDirectory Invokes the get method on the directory
+func GetFromDirectory(k CycleRequestMessage, ip []byte, port int) (cyc CycleMessage, ok bool) {
+	ok = false //assume failure
+	iDJSON, err := json.Marshal(k)
+	req, err := http.NewRequest("GET", "http://"+string(ip)+":"+strconv.Itoa(port)+"/get", bytes.NewBuffer(iDJSON))
+	req.Header.Set("Content-Type", "application/json")
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return
+	}
+	body, err := ioutil.ReadAll(resp.Body)
+	err = json.Unmarshal(body, &cyc)
+	if err != nil {
+		return
+	}
+	resp.Body.Close()
+	ok = true
+	return
+}
+
+//SendToClient Invokes the post method on the server
+func SendToClient(res ResEval, ip []byte, port int) bool {
+	circuitJSON, err := json.Marshal(res)
+	req, err := http.NewRequest("POST", "http://"+string(ip)+":"+strconv.Itoa(port)+"/post", bytes.NewBuffer(circuitJSON))
+	if err != nil {
+		fmt.Println("generating request failed")
+	}
+	req.Header.Set("Content-Type", "application/json")
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	resp.Body.Close()
+	if err != nil {
+		//log.Fatal(err)
+		return false
+	}
+	return true
+}
+
+//GetFromClient Invokes the get method on the client
+func GetFromClient(tokenChallenge Token, ip []byte, port int) (token Token, ok bool) {
+	ok = false //assume failure
+	iDJSON, err := json.Marshal(tokenChallenge)
+	req, err := http.NewRequest("GET", "http://"+string(ip)+":"+strconv.Itoa(port)+"/get", bytes.NewBuffer(iDJSON))
+	req.Header.Set("Content-Type", "application/json")
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return
+	}
+	body, err := ioutil.ReadAll(resp.Body)
+	err = json.Unmarshal(body, &token)
+	if err != nil {
+		return
+	}
+	resp.Body.Close()
+	ok = true
+	return
 }
 
 func SendToServerGarble(k CircuitMessage) bool {
