@@ -22,42 +22,58 @@ import (
 	"strconv"
 )
 
+//Wire wire abstraction
 type Wire struct {
 	WireID    string `json:"WireID"`
 	WireLabel []byte `json:"WireLabel"`
 }
+
+//Gate gate abstraction
 type Gate struct {
 	GateID     string   `json:"GateID"`
 	GateInputs []string `json:"GateInputs"`
 }
+
+//CircuitGate a gate in a boolean circuit
 type CircuitGate struct {
 	Gate
 	TruthTable []bool `json:"TruthTable"`
 }
+
+//GarbledGate a gate in a garbled circuit
 type GarbledGate struct {
 	Gate
 	GarbledValues [][]byte `json:"GarbledValues"`
 }
 
+//ComID computation ID abstraction
 type ComID struct {
 	CID string `json:"ComID"`
 }
+
+//Circuit circuit abstraction
 type Circuit struct {
 	InputGates  []CircuitGate `json:"InputGates"`
 	MiddleGates []CircuitGate `json:"MiddleGates"`
 	OutputGates []CircuitGate `json:"OutputGates"`
 }
+
+//Randomness container for randomness
 type Randomness struct {
 	Rin       int64 `json:"Rin"`
 	Rout      int64 `json:"Rout"`
 	Rgc       int64 `json:"Rgc"`
 	LblLength int   `json:"LblLength"`
 }
+
+//CircuitMessage a complete circuit message
 type CircuitMessage struct {
 	Circuit
 	ComID
 	Randomness
 }
+
+//GarbledCircuit garbled circuit abstraction
 type GarbledCircuit struct {
 	InputGates  []GarbledGate `json:"InputGates"`
 	MiddleGates []GarbledGate `json:"MiddleGates"`
@@ -65,69 +81,84 @@ type GarbledCircuit struct {
 	ComID
 }
 
+//GarbledMessage complete garbled circuit message
 type GarbledMessage struct {
 	InputWires []Wire `json:"InputWires"`
 	GarbledCircuit
 	OutputWires []Wire `json:"OutputWires"`
 }
 
+//ResEval evaluation result abstraction
 type ResEval struct {
 	Res [][]byte `json:"Result"`
 	ComID
 }
 
+//PartyInfo container for general information about a node
 type PartyInfo struct {
 	IP        []byte `json:"IP"`
 	Port      int    `json:"Port"`
 	PublicKey []byte `json:"PublicKey"`
 }
 
+//MyInfo container for general and private information about a node
 type MyInfo struct {
 	PartyInfo
 	PrivateKey []byte `json:"PrivateKey"`
 }
 
+//ServerCapabilities server capabilities abstraction
 type ServerCapabilities struct {
 	NumberOfGates int     `json:"NumberOfGates"`
 	FeePerGate    float64 `json:"FeePerGate"`
 }
+
+//Token a token container for the ease of message passing
 type Token struct {
 	TokenGen []byte `json:"TokenGen"`
 }
 
+//ServerInfo container for server relevant info in Directory of Service
 type ServerInfo struct {
 	PartyInfo
 	ServerCapabilities
 }
 
+//ClientInfo container for client relevant info in Directory of Service
 type ClientInfo struct {
 	PartyInfo
 }
+
+//RegisterationMessage a complete registration message
 type RegisterationMessage struct {
-	Type string `json:"Type"` //Server, Client
-	ServerInfo
-	ClientInfo
+	Type   string     `json:"Type"` //Server, Client
+	Server ServerInfo `json:"ServerInfo"`
 }
+
+//FunctionInfo a container for function requirements
 type FunctionInfo struct {
 	Token
 	NumberOfServers    int `json:"NumberOfServers"`
 	ServerCapabilities     //in this case we describe the capabilities needed to compute the circuit
 }
 
-//Wrapping In case we needed to add new request types for failure handling
+//CycleRequestMessage Wrapping In case we needed to add new request types for failure handling
 type CycleRequestMessage struct {
 	FunctionInfo
 }
 
+//Cycle cycle wrapper
 type Cycle struct {
-	Cycle []PartyInfo `json:"Cycle"`
+	ServersCycle []PartyInfo `json:"ServersCycle"`
 }
 
+//CycleMessage a complete cycle message reply
 type CycleMessage struct {
 	Cycle
 	TotalFee int `json:"TotalFee"`
 }
 
+//Message passed through cycle
 type Message struct {
 	Type string `json:"Type"` //Garble, Rerand, Eval
 	Circuit
@@ -138,8 +169,37 @@ type Message struct {
 	NextServer PartyInfo `json:"NextServer"`
 }
 
+//MessageArray container of messages
 type MessageArray struct {
 	Array []Message `json:"Array"`
+	Keys  [][]byte  `json:"Keys"`
+}
+
+//DirctoryInfo Global Variable to store Directory communication info
+var DirctoryInfo = struct {
+	port int
+	ip   []byte
+}{
+	port: 0,
+	ip:   []byte(""),
+}
+
+//MyOwnInfo personal info container
+var MyOwnInfo MyInfo
+
+//SetMyInfo sets the info of the current node
+func SetMyInfo() {
+	pI, sk := GetPartyInfo()
+	MyOwnInfo = MyInfo{
+		PartyInfo:  pI,
+		PrivateKey: sk,
+	}
+}
+
+//SetDirectoryInfo to set the dircotry info
+func SetDirectoryInfo(ip []byte, port int) {
+	DirctoryInfo.port = port
+	DirctoryInfo.ip = ip
 }
 
 //GetCircuitSize get the number of gates in a circuit
@@ -148,65 +208,195 @@ func GetCircuitSize(circ Circuit) int {
 }
 
 //Comm basically, the channel will need to send the input/output mapping as well
-func Comm(cir string, cID int, chVDCSCommCircRes chan<- GarbledMessage) {
+func Comm(cir string, cID int64, token Token, numberOfServers int, feePerGate float64, chVDCSCommCircRes chan<- GarbledMessage) {
 	file, _ := ioutil.ReadFile(cir + ".json")
-	k := Circuit{}
-	err := json.Unmarshal([]byte(file), &k) //POSSIBLE BUG
+	mCirc := Circuit{}
+	err := json.Unmarshal([]byte(file), &mCirc) //POSSIBLE BUG
 	if err != nil {
 		log.Fatal(err)
 	}
 	rand.Seed(int64(cID))
-	mCirc := CircuitMessage{Circuit: Circuit{
-		InputGates:  k.InputGates,
-		MiddleGates: k.MiddleGates,
-		OutputGates: k.OutputGates,
-	},
-		ComID: ComID{strconv.Itoa(rand.Int())},
-		Randomness: Randomness{Rin: rand.Int63(),
-			Rout:      rand.Int63(),
-			Rgc:       rand.Int63(),
-			LblLength: 16, //Should be rand.Int()%16 + 16
+
+	circuitSize := GetCircuitSize(mCirc)
+	cycleRequestMessage := CycleRequestMessage{
+		FunctionInfo{
+			Token: Token{
+				TokenGen: token.TokenGen,
+			},
+			NumberOfServers: numberOfServers,
+			ServerCapabilities: ServerCapabilities{
+				NumberOfGates: circuitSize,
+				FeePerGate:    feePerGate,
+			},
 		},
 	}
-	//fmt.Println(mCirc)
 
-	for !SendToServerGarble(mCirc) {
+	cycleMessage, ok := GetFromDirectory(cycleRequestMessage, DirctoryInfo.ip, DirctoryInfo.port)
+	for ok == false {
+		cycleMessage, ok = GetFromDirectory(cycleRequestMessage, DirctoryInfo.ip, DirctoryInfo.port)
+	}
+
+	msgArray, randNess, keys := GenerateMessageArray(cycleMessage, cID, mCirc)
+	fmt.Println(cycleMessage)
+	fmt.Println(keys) //store the keys somewhere for recovery or pass on channel
+
+	ipS1 := cycleMessage.ServersCycle[0].IP
+	portS1 := cycleMessage.ServersCycle[0].Port
+
+	for !SendToServer(msgArray, ipS1, portS1) {
 
 	}
 
 	//Generate input wires
-	//Wait for response
-	inputSize := len(mCirc.InputGates) * 2
-	outputSize := len(mCirc.OutputGates)
+	arrIn, arrOut := GenerateInputWiresValidate(mCirc, randNess, cID)
 
-	arrIn := YaoGarbledCkt_in(mCirc.Rin, mCirc.LblLength, inputSize)
-	arrOut := YaoGarbledCkt_out(mCirc.Rout, mCirc.LblLength, outputSize)
+	//Send Circuit to channel
 	var gcm GarbledMessage
-	var oke bool
-	for gcm, oke = GetFromServerGarble(mCirc.CID); !oke; {
+	for _, val := range arrIn {
+		gcm.InputWires = append(gcm.InputWires, Wire{WireLabel: val})
+	}
+	for _, val := range arrOut {
+		gcm.OutputWires = append(gcm.OutputWires, Wire{WireLabel: val})
+	}
+	chVDCSCommCircRes <- gcm
+}
+
+//GenerateMessageArray Takes a CycleMessage, a cID, and a circuit and creates a message array encrypted and returns it with the corresponding randomness for the user to use
+func GenerateMessageArray(cycleMessage CycleMessage, cID int64, circ Circuit) (mArr MessageArray, rArr []Randomness, keys [][]byte) {
+	numberOfServers := len(cycleMessage.ServersCycle)
+
+	rArr = GenerateRandomness(numberOfServers, cID)
+
+	message := Message{
+		Type:       "Garble",
+		Circuit:    circ,
+		Randomness: rArr[0],
+		ComID:      ComID{CID: strconv.FormatInt(cID, 10)},
+		NextServer: cycleMessage.ServersCycle[1],
+	}
+	k1 := RandomSymmKeyGen()
+	messageEnc := EncryptMessageAES(k1, message)
+
+	keys = append(keys, k1)
+
+	k1, err := RSAPublicEncrypt(RSAPublicKeyFromBytes(cycleMessage.ServersCycle[0].PublicKey), k1)
+	if err != nil {
+		panic("Invalid PublicKey")
+	}
+	mArr = MessageArray{
+		Array: append(mArr.Array, messageEnc),
+		Keys:  append(mArr.Keys, k1),
+	}
+
+	for i := 1; i < numberOfServers-1; i++ {
+
+		message = Message{
+			Type:       "ReRand",
+			Randomness: rArr[i],
+			ComID:      ComID{CID: strconv.FormatInt(cID, 10)},
+			NextServer: cycleMessage.ServersCycle[i+1],
+		}
+
+		k1 = RandomSymmKeyGen()
+		messageEnc = EncryptMessageAES(k1, message)
+
+		keys = append(keys, k1)
+
+		k1, err = RSAPublicEncrypt(RSAPublicKeyFromBytes(cycleMessage.ServersCycle[i].PublicKey), k1)
+		if err != nil {
+			panic("Invalid PublicKey")
+		}
+		mArr = MessageArray{
+			Array: append(mArr.Array, messageEnc),
+			Keys:  append(mArr.Keys, k1),
+		}
 
 	}
 
-	//gcm = Garble(mCirc)
-	//Validate Correctness of result
-	//fmt.Println(gcm)
-	//fmt.Println("\nHere:\n", arrIn, "\nThere\n", arrOut)
+	message = Message{
+		Type:       "Eval",
+		Randomness: rArr[numberOfServers-1],
+		ComID:      ComID{CID: strconv.FormatInt(cID, 10)},
+		NextServer: MyOwnInfo.PartyInfo,
+	}
+	k1 = RandomSymmKeyGen()
+	messageEnc = EncryptMessageAES(k1, message)
 
+	keys = append(keys, k1)
+
+	k1, err = RSAPublicEncrypt(RSAPublicKeyFromBytes(cycleMessage.ServersCycle[numberOfServers-1].PublicKey), k1)
+	if err != nil {
+		panic("Invalid PublicKey")
+	}
+	mArr = MessageArray{
+		Array: append(mArr.Array, messageEnc),
+		Keys:  append(mArr.Keys, k1),
+	}
+
+	return
+}
+
+//EncryptMessageAES takes a symmetric key and message, and encrypts the message using that key
+func EncryptMessageAES(key []byte, msg Message) Message {
+	return msg
+}
+
+//RandomSymmKeyGen Generates a random key for the AES algorithm
+func RandomSymmKeyGen() (key []byte) {
+	return
+}
+
+//GenerateInputWiresValidate Given circuit and randomness generate the input wires corresponding to server n-1
+func GenerateInputWiresValidate(circ Circuit, rArr []Randomness, cID int64) (in [][]byte, out [][]byte) {
+	/*	inputSize := len(mCirc.InputGates) * 2
+		outputSize := len(mCirc.OutputGates)
+
+		arrIn := YaoGarbledCkt_in(mCirc.Rin, mCirc.LblLength, inputSize)
+		arrOut := YaoGarbledCkt_out(mCirc.Rout, mCirc.LblLength, outputSize)
+	*/
+
+	return
+}
+
+//GenerateRandomness generates randomness array corresponding to NumberOfServers with a certain computation ID
+func GenerateRandomness(numberOfServers int, cID int64) []Randomness {
+	//rArr := make(Randomness, numberOfServers)
+	/*
+		mCirc := CircuitMessage{Circuit: Circuit{
+			InputGates:  k.InputGates,
+			MiddleGates: k.MiddleGates,
+			OutputGates: k.OutputGates,
+		},
+			ComID: ComID{strconv.Itoa(rand.Int())},
+			Randomness: Randomness{Rin: rand.Int63(),
+				Rout:      rand.Int63(),
+				Rgc:       rand.Int63(),
+				LblLength: 16, //Should be rand.Int()%16 + 16
+			},
+		}*/
+
+	var rArr []Randomness
+	return rArr
+}
+
+//CompareWires Takes a garbled circuit and compares wires to input,output wires provided by the user
+func CompareWires(gcm GarbledMessage, arrIn [][]byte, arrOut [][]byte) bool {
 	for k, val := range gcm.InputWires {
 		if bytes.Compare(arrIn[k], val.WireLabel) != 0 {
 			fmt.Println("I was cheated on this: ", arrIn[k], val.WireLabel)
-			panic("The server has cheated me") //redo the process, by recovering from panic by recalling comm
+			//			panic("The server has cheated me") //redo the process, by recovering from panic by recalling comm
+			return false
 		}
 	}
 	for k, val := range gcm.OutputWires {
 		if bytes.Compare(arrOut[k], val.WireLabel) != 0 {
 
 			fmt.Println("I was cheated on this: ", arrOut[k], val.WireLabel)
-			panic("The server has cheated me") //redo the process, by recovering from panic by recalling comm
+			//panic("The server has cheated me") //redo the process, by recovering from panic by recalling comm
+			return false
 		}
 	}
-	//Send Circuit to channel
-	chVDCSCommCircRes <- gcm
+	return true
 }
 
 //SendToServer Invokes the post method on the server
@@ -326,6 +516,7 @@ func GetFromClient(tokenChallenge Token, ip []byte, port int) (token Token, ok b
 	return
 }
 
+//SendToServerGarble used in pt2
 func SendToServerGarble(k CircuitMessage) bool {
 	circuitJSON, err := json.Marshal(k)
 	req, err := http.NewRequest("POST", "http://localhost:8080/post", bytes.NewBuffer(circuitJSON))
@@ -343,6 +534,7 @@ func SendToServerGarble(k CircuitMessage) bool {
 	return true
 }
 
+//GetFromServerGarble used in pt2
 func GetFromServerGarble(id string) (k GarbledMessage, ok bool) {
 	ok = false //assume failure
 	iDJSON, err := json.Marshal(ComID{CID: id})
@@ -366,6 +558,7 @@ func GetFromServerGarble(id string) (k GarbledMessage, ok bool) {
 	return
 }
 
+//SendToServerEval used in pt2
 func SendToServerEval(k GarbledMessage) bool {
 	circuitJSON, err := json.Marshal(k)
 	req, err := http.NewRequest("POST", "http://localhost:8081/post", bytes.NewBuffer(circuitJSON))
@@ -382,6 +575,7 @@ func SendToServerEval(k GarbledMessage) bool {
 	return true
 }
 
+//GetFromServerEval used in pt2
 func GetFromServerEval(id string) (res [][]byte, ok bool) {
 	ok = false // assume failure
 	iDJSON, err := json.Marshal(ComID{CID: id})
@@ -407,6 +601,8 @@ func GetFromServerEval(id string) (res [][]byte, ok bool) {
 	ok = true
 	return
 }
+
+//GenNRandNumbers generating random byte arrays
 func GenNRandNumbers(n int, length int, r int64, considerR bool) [][]byte {
 	if considerR {
 		rand.Seed(r)
@@ -423,15 +619,18 @@ func GenNRandNumbers(n int, length int, r int64, considerR bool) [][]byte {
 	return seeds
 }
 
+//YaoGarbledCkt_in input wire garbling
 func YaoGarbledCkt_in(rIn int64, length int, inputSize int) [][]byte {
 	return GenNRandNumbers(2*inputSize, length, rIn, true)
 }
 
+//YaoGarbledCkt_out output wire garbling
 func YaoGarbledCkt_out(rOut int64, length int, outputSize int) [][]byte {
 	// only one output bit for now
 	return GenNRandNumbers(2*outputSize, length, rOut, true)
 }
 
+//EncryptAES symmetric encryption using AES algorithm
 func EncryptAES(encKey []byte, plainText []byte) (ciphertext []byte, ok bool) {
 
 	ok = false //assume failure
@@ -457,6 +656,7 @@ func EncryptAES(encKey []byte, plainText []byte) (ciphertext []byte, ok bool) {
 	return
 }
 
+//DecryptAES symmetric decryption using AES algorithm
 func DecryptAES(encKey []byte, cipherText []byte) (plainText []byte, ok bool) {
 
 	ok = false //assume failure
@@ -490,6 +690,7 @@ func DecryptAES(encKey []byte, cipherText []byte) (plainText []byte, ok bool) {
 	return
 }
 
+//Garble circuit garbling
 func Garble(circ CircuitMessage) GarbledMessage {
 
 	inputSize := len(circ.InputGates) * 2
@@ -722,6 +923,7 @@ func Garble(circ CircuitMessage) GarbledMessage {
 	return gm
 }
 
+//Evaluate evaluate a garbled circuit
 func Evaluate(gc GarbledMessage) (result ResEval) {
 
 	result.CID = gc.CID
