@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"fmt"
 	"log"
 	"math/rand"
 	"os"
@@ -12,14 +13,17 @@ import (
 )
 
 //test the directory service
+//sending tokens was not tested
 func main() {
+	createFile()
 	id := 0
-	var k ServerInfo
-	k.IP = []byte("192.168.1.1")
-	k.Port = 3030
-	k.PublicKey = []byte("abcsjsjsa")
-	k.NumberOfGates = 321
-	k.FeePerGate = 256.55
+	var k RegisterationMessage
+	k.Server.IP = []byte("192.168.1.1")
+	k.Server.Port = 3030
+	k.Server.PublicKey = []byte("abcsjsjsa")
+	k.Server.NumberOfGates = 321
+	k.Server.FeePerGate = 256.55
+	k.Type = "Client"
 	writeServer(k, &id)
 	writeServer(k, &id)
 	var k2 ClientInfo
@@ -87,16 +91,16 @@ func validRegisteredServer(lines []string, k ServerInfo, t Token) bool {
 }
 
 //write new server to the directory service
-func writeServer(k ServerInfo, id *int) {
-	if validNewServer(read(), k) {
-		token := string(k.IP) + strconv.FormatInt(int64(k.Port), 10) + string(k.PublicKey) + strconv.FormatInt(int64(k.NumberOfGates), 10) + strconv.FormatFloat(k.FeePerGate, 'f', 6, 64)
+func writeServer(k RegisterationMessage, id *int) {
+	if validNewServer(read(), k.Server) {
+		token := string(k.Server.IP) + strconv.FormatInt(int64(k.Server.Port), 10) + string(k.Server.PublicKey) + strconv.FormatInt(int64(k.Server.NumberOfGates), 10) + strconv.FormatFloat(k.Server.FeePerGate, 'f', 6, 64)
 		token = strconv.FormatInt(int64(*id), 10) + generateToken(token)
 		*id++
 		f, err := os.OpenFile("DirectoryService.txt", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 		if err != nil {
 			log.Fatal(err)
 		}
-		if _, err := f.Write([]byte("Server " + string(k.IP) + " " + strconv.FormatInt(int64(k.Port), 10) + " " + string(k.PublicKey) + " " + strconv.FormatInt(int64(k.NumberOfGates), 10) + " " + strconv.FormatFloat(k.FeePerGate, 'f', 6, 64) + " " + string(token) + "\n")); err != nil {
+		if _, err := f.Write([]byte("Server " + string(k.Server.IP) + " " + strconv.FormatInt(int64(k.Server.Port), 10) + " " + string(k.Server.PublicKey) + " " + strconv.FormatInt(int64(k.Server.NumberOfGates), 10) + " " + strconv.FormatFloat(k.Server.FeePerGate, 'f', 6, 64) + " " + string(token) + "\n")); err != nil {
 			log.Fatal(err)
 		}
 		if err := f.Close(); err != nil {
@@ -105,7 +109,11 @@ func writeServer(k ServerInfo, id *int) {
 		var t Token
 		t.TokenGen = []byte(token)
 		//send token to the server
-		//GetFromClient(t, k.IP, k.Port)
+		if k.Type == "Client" {
+			GetFromClient(t, k.Server.IP, k.Server.Port)
+		} else {
+			GetFromServer(t, k.Server.IP, k.Server.Port)
+		}
 		println("New Server been registered")
 
 	} else {
@@ -190,4 +198,16 @@ func shuffle(src []string) []string {
 func generateToken(str string) string {
 	str = strings.Join(shuffle(breakToCharSlice(str)), "")
 	return strings.Replace(str, "\"", "", -1)
+}
+
+//create Empty DirectorySevice
+func createFile() {
+
+	var file, err = os.Create("DirectoryService.txt")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer file.Close()
+
+	fmt.Println("File Created Successfully", "DirectoryService.txt")
 }
