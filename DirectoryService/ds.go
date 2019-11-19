@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"fmt"
 	"log"
 	"math/rand"
@@ -104,6 +105,15 @@ func validRegisteredUser(lines []string, k RegisterationMessage, t Token) bool {
 
 }
 
+//CreateToken Create a token challenge
+func CreateToken(token Token, publickey []byte) Token {
+	ans, err := RSAPublicEncrypt(RSAPublicKeyFromBytes(publickey), token.TokenGen)
+	if err != nil {
+		panic("Wrong Token!")
+	}
+	return Token{TokenGen: ans}
+}
+
 //Write to Directory Service
 func writeToDS(k RegisterationMessage, id *int) {
 	//write new server to the directory service
@@ -111,49 +121,62 @@ func writeToDS(k RegisterationMessage, id *int) {
 		if validNewServer(readFromDS(), k.Server) {
 			token := string(k.Server.IP) + strconv.FormatInt(int64(k.Server.Port), 10) + string(k.Server.PublicKey) + strconv.FormatInt(int64(k.Server.NumberOfGates), 10) + strconv.FormatFloat(k.Server.FeePerGate, 'f', 6, 64)
 			token = strconv.FormatInt(int64(*id), 10) + generateToken(token)
-			*id++
-			f, err := os.OpenFile("DirectoryService.txt", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-			if err != nil {
-				log.Fatal(err)
-			}
-			if _, err := f.Write([]byte("Server " + string(k.Server.IP) + " " + strconv.FormatInt(int64(k.Server.Port), 10) + " " + string(k.Server.PublicKey) + " " + strconv.FormatInt(int64(k.Server.NumberOfGates), 10) + " " + strconv.FormatFloat(k.Server.FeePerGate, 'f', 6, 64) + " " + string(token) + "\n")); err != nil {
-				log.Fatal(err)
-			}
-			if err := f.Close(); err != nil {
-				log.Fatal(err)
-			}
 			var t Token
 			t.TokenGen = []byte(token)
-			GetFromServer(t, k.Server.IP, k.Server.Port)
-			println("New Server been registered")
+			t1 := CreateToken(t, k.Server.PublicKey)
+			var success bool = false
+			for !success {
+				t2, success := GetFromServer(t1, k.Server.IP, k.Server.Port)
+				if bytes.Compare(t2.TokenGen, t.TokenGen) == 0 && success {
+					*id++
+					f, err := os.OpenFile("DirectoryService.txt", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+					if err != nil {
+						log.Fatal(err)
+					}
+					if _, err := f.Write([]byte("Server " + string(k.Server.IP) + " " + strconv.FormatInt(int64(k.Server.Port), 10) + " " + string(k.Server.PublicKey) + " " + strconv.FormatInt(int64(k.Server.NumberOfGates), 10) + " " + strconv.FormatFloat(k.Server.FeePerGate, 'f', 6, 64) + " " + string(token) + "\n")); err != nil {
+						log.Fatal(err)
+					}
+					if err := f.Close(); err != nil {
+						log.Fatal(err)
+					}
+
+				}
+				println("New Server been registered")
+			}
 
 		} else {
 			println("Server Has already been registered")
 		}
-	} else if k.Type == "Client" { //write new Client to the directory service
+	} else if k.Type == "Client" {
 		if validNewClient(readFromDS(), k.Server) {
 			token := string(k.Server.IP) + strconv.FormatInt(int64(k.Server.Port), 10) + string(k.Server.PublicKey) + strconv.FormatInt(int64(k.Server.NumberOfGates), 10) + strconv.FormatFloat(k.Server.FeePerGate, 'f', 6, 64)
 			token = strconv.FormatInt(int64(*id), 10) + generateToken(token)
-			*id++
-			f, err := os.OpenFile("DirectoryService.txt", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-			if err != nil {
-				log.Fatal(err)
-			}
-			if _, err := f.Write([]byte("Client " + string(k.Server.IP) + " " + strconv.FormatInt(int64(k.Server.Port), 10) + " " + string(k.Server.PublicKey) + " NULL NULL " + string(token) + "\n")); err != nil {
-				log.Fatal(err)
-			}
-			if err := f.Close(); err != nil {
-				log.Fatal(err)
-			}
 			var t Token
 			t.TokenGen = []byte(token)
-			GetFromClient(t, k.Server.IP, k.Server.Port)
-			println("New Client been registered")
+			t1 := CreateToken(t, k.Server.PublicKey)
+			var success bool = false
+			for !success {
+				t2, success := GetFromClient(t1, k.Server.IP, k.Server.Port)
+				if bytes.Compare(t2.TokenGen, t.TokenGen) == 0 && success {
+					*id++
+					f, err := os.OpenFile("DirectoryService.txt", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+					if err != nil {
+						log.Fatal(err)
+					}
+					if _, err := f.Write([]byte("Client " + string(k.Server.IP) + " " + strconv.FormatInt(int64(k.Server.Port), 10) + " " + string(k.Server.PublicKey) + " " + strconv.FormatInt(int64(k.Server.NumberOfGates), 10) + " " + strconv.FormatFloat(k.Server.FeePerGate, 'f', 6, 64) + " " + string(token) + "\n")); err != nil {
+						log.Fatal(err)
+					}
+					if err := f.Close(); err != nil {
+						log.Fatal(err)
+					}
+
+				}
+				println("New Client been registered")
+			}
 
 		} else {
 			println("Client Has already been registered")
 		}
-
 	}
 }
 
