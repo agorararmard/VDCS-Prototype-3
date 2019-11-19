@@ -3,42 +3,52 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"math/rand"
+	"net/http"
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"text/scanner"
 	"time"
 )
 
-//test the directory service
-//sending tokens was not tested
+var wg = sync.WaitGroup{}
+var id = 0
+
+//not testedddddddddddddddddddddddddddddddddddddddddddd
 func main() {
 	createEmptyDS()
-	id := 0
-	var k RegisterationMessage
-	k.Server.IP = []byte("192.168.1.1")
-	k.Server.Port = 3030
-	k.Server.PublicKey = []byte("abcsjsjsa")
-	k.Server.NumberOfGates = 321
-	k.Server.FeePerGate = 256.55
-	k.Type = "Server"
-	writeToDS(k, &id)
-	writeToDS(k, &id)
-	var k2 RegisterationMessage
-	k2.Server.IP = []byte("192.168.1.1")
-	k2.Server.Port = 3030
-	k2.Server.PublicKey = []byte("abcsjsjsa")
-	k2.Type = "Client"
-	writeToDS(k2, &id)
-	writeToDS(k2, &id)
-	k2.Server.IP = []byte("192.168.3.1")
-	k2.Server.Port = 3030
-	k2.Server.PublicKey = []byte("abjsjsa")
-	writeToDS(k2, &id)
+	wg.Add(1)
+	go server()
+	wg.Wait()
 
+}
+func server() {
+	http.HandleFunc("/get", getHandler)
+	http.ListenAndServe(":8080", nil)
+	wg.Done()
+}
+
+//GetHandler
+func getHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method == "Get" {
+		var x RegisterationMessage
+		jsn, err := ioutil.ReadAll(r.Body)
+		if err != nil {
+			log.Fatal("Error reading", err)
+		}
+		err = json.Unmarshal(jsn, &x)
+		if err != nil {
+			log.Fatal("bad decode", err)
+		}
+		go writeToDS(x, &id)
+
+	}
 }
 
 //read Directory Service word by word
