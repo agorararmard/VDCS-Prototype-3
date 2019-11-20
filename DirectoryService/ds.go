@@ -35,19 +35,20 @@ func server() {
 }
 
 //GetServersForACycle
-func getServers(lines []string, NumberOfGates int, NumberOfServers int) {
+func getServers(lines []string, NumberOfGates int, NumberOfServers int) []ServerInfo {
 	counter := 0
-
+	var s []ServerInfo
 	for i := 1; i < len(lines) && counter < NumberOfServers; i += 7 {
 		if lines[i-1] == "Server" && lines[i+3] == strconv.FormatInt(int64(NumberOfGates), 10) {
-			//lines[i] ip
-			//lines[i+1] port
-			//lines[i+2] publickey
-			//lines[i+4] feesPerGate
-			//lines[i+5] token
+			s[counter].IP = []byte(lines[i])
+			s[counter].Port, _ = strconv.Atoi(lines[i+1])
+			s[counter].PublicKey = []byte(lines[i+2])
+			s[counter].NumberOfGates, _ = strconv.Atoi(lines[i+3])
+			s[counter].FeePerGate, _ = strconv.ParseFloat(lines[i+4], 64)
 			counter++
 		}
 	}
+	return s
 }
 
 //PosttHandler
