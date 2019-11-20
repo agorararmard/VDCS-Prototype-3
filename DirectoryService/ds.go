@@ -29,13 +29,29 @@ func main() {
 
 }
 func server() {
-	http.HandleFunc("/get", getHandler)
+	http.HandleFunc("/post", postHandler)
 	http.ListenAndServe(":8080", nil)
 	wg.Done()
 }
 
-//GetHandler
-func getHandler(w http.ResponseWriter, r *http.Request) {
+//GetServersForACycle
+func getServers(lines []string, NumberOfGates int, NumberOfServers int) {
+	counter := 0
+
+	for i := 1; i < len(lines) && counter < NumberOfServers; i += 7 {
+		if lines[i-1] == "Server" && lines[i+3] == strconv.FormatInt(int64(NumberOfGates), 10) {
+			//lines[i] ip
+			//lines[i+1] port
+			//lines[i+2] publickey
+			//lines[i+4] feesPerGate
+			//lines[i+5] token
+			counter++
+		}
+	}
+}
+
+//PosttHandler
+func postHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method == "Get" {
 		var x RegisterationMessage
 		jsn, err := ioutil.ReadAll(r.Body)
