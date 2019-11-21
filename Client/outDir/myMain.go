@@ -9,12 +9,13 @@ import (
 )
 
 func main() {
+	vdcs.SetDirectoryInfo([]byte("10.40.34.185"), 38497)
 	vdcs.ClientRegister()
 	go vdcs.ClientHTTP()
 	_myEqual_string_1_string_1Ch1 := make(chan vdcs.ChannelContainer)
-	go vdcs.Comm("myEqual_string_1_string_1", 1, 4, 1, _myEqual_string_1_string_1Ch1)
+	go vdcs.Comm("myEqual_string_1_string_1", 1, 3, 1, _myEqual_string_1_string_1Ch1)
 	_myEqual_string_1_string_1Ch0 := make(chan vdcs.ChannelContainer)
-	go vdcs.Comm("myEqual_string_1_string_1", 0, 4, 1, _myEqual_string_1_string_1Ch0)
+	go vdcs.Comm("myEqual_string_1_string_1", 0, 3, 1, _myEqual_string_1_string_1Ch0)
 
 	var i string = "a"
 	var j string = "a"

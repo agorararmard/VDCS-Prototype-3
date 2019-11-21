@@ -186,11 +186,11 @@ type ChannelContainer struct {
 
 //DirctoryInfo Global Variable to store Directory communication info
 var DirctoryInfo = struct {
-	port int
-	ip   []byte
+	Port int
+	IP   []byte
 }{
-	port: 0,
-	ip:   []byte(""),
+	Port: 0,
+	IP:   []byte(""),
 }
 
 //MyOwnInfo personal info container
@@ -219,8 +219,8 @@ func SetMyInfo() {
 
 //SetDirectoryInfo to set the dircotry info
 func SetDirectoryInfo(ip []byte, port int) {
-	DirctoryInfo.port = port
-	DirctoryInfo.ip = ip
+	DirctoryInfo.Port = port
+	DirctoryInfo.IP = ip
 }
 
 //GetCircuitSize get the number of gates in a circuit
@@ -248,7 +248,7 @@ func ClientRegister() {
 			},
 		},
 	}
-	for !SendToDirectory(regMsg, DirctoryInfo.ip, DirctoryInfo.port) {
+	for !SendToDirectory(regMsg, DirctoryInfo.IP, DirctoryInfo.Port) {
 	}
 }
 
@@ -309,7 +309,7 @@ func PostHandlerClient(w http.ResponseWriter, r *http.Request) {
 func ClientHTTP() {
 	http.HandleFunc("/post", PostHandlerClient)
 	http.HandleFunc("/get", GetHandlerClient)
-	http.ListenAndServe(strconv.Itoa(MyOwnInfo.Port), nil)
+	http.ListenAndServe(":"+strconv.Itoa(MyOwnInfo.Port), nil)
 }
 
 //Comm basically, the channel will need to send the input/output mapping as well
@@ -334,9 +334,9 @@ func Comm(cir string, cID int64, numberOfServers int, feePerGate float64, chVDCS
 		},
 	}
 
-	cycleMessage, ok := GetFromDirectory(cycleRequestMessage, DirctoryInfo.ip, DirctoryInfo.port)
+	cycleMessage, ok := GetFromDirectory(cycleRequestMessage, DirctoryInfo.IP, DirctoryInfo.Port)
 	for ok == false {
-		cycleMessage, ok = GetFromDirectory(cycleRequestMessage, DirctoryInfo.ip, DirctoryInfo.port)
+		cycleMessage, ok = GetFromDirectory(cycleRequestMessage, DirctoryInfo.IP, DirctoryInfo.Port)
 	}
 
 	msgArray, randNess, keys := GenerateMessageArray(cycleMessage, cID, mCirc)
@@ -419,8 +419,7 @@ func GenerateMessageArray(cycleMessage CycleMessage, cID int64, circ Circuit) (m
 	}
 
 	message = Message{
-		Type:       "Eval",
-		Randomness: rArr[numberOfServers-1],
+		Type:       "SEval",
 		ComID:      ComID{CID: strconv.FormatInt(cID, 10)},
 		NextServer: MyOwnInfo.PartyInfo,
 	}
@@ -682,7 +681,7 @@ func EncryptMessageAES(key []byte, msg Message) (nMsg Message) {
 		nMsg.Randomness = EncryptRandomnessAES(key, msg.Randomness)
 		//Encrypt NextServer Info
 		nMsg.NextServer = EncryptPartyInfoAES(key, msg.NextServer)
-	} else if msg.Type == "Eval" {
+	} else if msg.Type == "SEval" {
 		if len(msg.GarbledMessage.InputGates) != 0 {
 			//Encrypt input gates
 			nMsg.GarbledMessage.InputGates = EncryptGarbledGatesAES(key, msg.GarbledMessage.InputGates)
@@ -691,11 +690,12 @@ func EncryptMessageAES(key []byte, msg Message) (nMsg Message) {
 			//Encrypt output gates
 			nMsg.GarbledMessage.OutputGates = EncryptGarbledGatesAES(key, msg.GarbledMessage.OutputGates)
 
-		} else {
-			//Encrypt InputWires
-			nMsg.InputWires = EncryptWiresAES(key, msg.InputWires)
-
 		}
+		//Encrypt NextServer Info
+		nMsg.NextServer = EncryptPartyInfoAES(key, msg.NextServer)
+	} else if msg.Type == "CEval" {
+		//Encrypt InputWires
+		nMsg.InputWires = EncryptWiresAES(key, msg.InputWires)
 		//Encrypt NextServer Info
 		nMsg.NextServer = EncryptPartyInfoAES(key, msg.NextServer)
 	}
@@ -749,7 +749,7 @@ func DecryptMessageAES(key []byte, msg Message) (nMsg Message) {
 		nMsg.Randomness = DecryptRandomnessAES(key, msg.Randomness)
 		//Decrypt NextServer Info
 		nMsg.NextServer = DecryptPartyInfoAES(key, msg.NextServer)
-	} else if msg.Type == "Eval" {
+	} else if msg.Type == "SEval" {
 		if len(msg.GarbledMessage.InputGates) != 0 {
 			//Decrypt input gates
 			nMsg.GarbledMessage.InputGates = DecryptGarbledGatesAES(key, msg.GarbledMessage.InputGates)
@@ -758,13 +758,15 @@ func DecryptMessageAES(key []byte, msg Message) (nMsg Message) {
 			//Decrypt output gates
 			nMsg.GarbledMessage.OutputGates = DecryptGarbledGatesAES(key, msg.GarbledMessage.OutputGates)
 
-		} else {
-			//Decrypt InputWires
-			nMsg.InputWires = DecryptWiresAES(key, msg.InputWires)
 		}
 		//Decrypt NextServer Info
 		nMsg.NextServer = DecryptPartyInfoAES(key, msg.NextServer)
 
+	} else if msg.Type == "CEval" {
+		//Decrypt InputWires
+		nMsg.InputWires = DecryptWiresAES(key, msg.InputWires)
+		//Decrypt NextServer Info
+		nMsg.NextServer = DecryptPartyInfoAES(key, msg.NextServer)
 	}
 
 	return nMsg
@@ -1582,6 +1584,18 @@ func RSAPublicVerify(key *rsa.PublicKey, sign, data []byte) error {
 	return rsa.VerifyPKCS1v15(key, crypto.SHA256, Convert32BytesToByteStream(SHA256Hash(data)), sign)
 }
 
+//IPtoProperByte puts the IP in its proper formatting
+func IPtoProperByte(ip net.IP) []byte {
+	var iN0 int = int(ip[0])
+	var iN1 int = int(ip[1])
+	var iN2 int = int(ip[2])
+	var iN3 int = int(ip[3])
+
+	ret := []byte(strconv.Itoa(iN0) + "." + strconv.Itoa(iN1) + "." + strconv.Itoa(iN2) + "." + strconv.Itoa(iN3))
+
+	return ret
+}
+
 //GetPartyInfo for a party to extract his own communication info
 func GetPartyInfo() (PartyInfo, []byte) {
 	port, err := GetFreePort()
@@ -1597,7 +1611,7 @@ func GetPartyInfo() (PartyInfo, []byte) {
 		panic(err)
 	}
 	pI := PartyInfo{
-		IP:        ip,
+		IP:        IPtoProperByte(ip),
 		Port:      port,
 		PublicKey: BytesFromRSAPublicKey(pk),
 	}

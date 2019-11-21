@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"strconv"
 )
 
 type PartyInfo struct {
@@ -263,4 +264,15 @@ func main() {
 	if err == nil {
 		fmt.Println("Yes it's his signature")
 	}
+
+	i1 := 1234
+
+	/** converting the i1 variable into a string using Itoa method */
+	str1 := strconv.Itoa(i1)
+	fmt.Println(str1)
+
+	i2 := 5678
+	/** converting the i2 variable into a string using FormatInt method */
+	str2 := strconv.FormatInt(int64(i2), 10)
+	fmt.Println(str2)
 }
