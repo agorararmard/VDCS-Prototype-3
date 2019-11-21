@@ -38,7 +38,7 @@ func server() {
 
 func initServer() {
 	//set whatever to the directory
-	vdcs.SetDirectoryInfo([]byte("10.40.34.185"), 38497)
+	vdcs.SetDirectoryInfo([]byte("10.40.34.185"), 44183)
 
 	//register now
 	ServerRegister(300, 2.4)

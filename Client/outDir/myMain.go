@@ -9,7 +9,7 @@ import (
 )
 
 func main() {
-	vdcs.SetDirectoryInfo([]byte("10.40.34.185"), 38497)
+	vdcs.SetDirectoryInfo([]byte("10.40.34.185"), 44183)
 	vdcs.ClientRegister()
 	go vdcs.ClientHTTP()
 	_myEqual_string_1_string_1Ch1 := make(chan vdcs.ChannelContainer)

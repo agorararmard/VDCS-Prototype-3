@@ -89,7 +89,9 @@ func postHandler(w http.ResponseWriter, r *http.Request) {
 
 //GetHandler
 func getHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method == "Get" {
+	fmt.Println("My get was invoked")
+	fmt.Println(r.Method)
+	if r.Method == "GET" {
 		var x vdcs.CycleRequestMessage
 		jsn, err := ioutil.ReadAll(r.Body)
 		if err != nil {
@@ -99,8 +101,9 @@ func getHandler(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			log.Fatal("bad decode", err)
 		}
+		fmt.Println("His request: ", x)
 		value := getServers(readFromDS(), x.NumberOfGates, x.NumberOfServers, x.FeePerGate)
-
+		fmt.Println("My Generated Cycle: ", value)
 		responseJSON, err := json.Marshal(value)
 		if err != nil {
 			fmt.Fprintf(w, "error %s", err)
