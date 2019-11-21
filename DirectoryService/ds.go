@@ -30,6 +30,7 @@ func main() {
 }
 func server() {
 	http.HandleFunc("/post", postHandler)
+	http.HandleFunc("/get", getHandler)
 	http.ListenAndServe(":8080", nil)
 	wg.Done()
 }
@@ -39,7 +40,7 @@ func getServers(lines []string, NumberOfGates int, NumberOfServers int) []Server
 	counter := 0
 	var s []ServerInfo
 	for i := 1; i < len(lines) && counter < NumberOfServers; i += 7 {
-		if lines[i-1] == "Server" && lines[i+3] == strconv.FormatInt(int64(NumberOfGates), 10) {
+		if lines[i-1] == "Server" && lines[i+3] >= strconv.FormatInt(int64(NumberOfGates), 10) {
 			s[counter].IP = []byte(lines[i])
 			s[counter].Port, _ = strconv.Atoi(lines[i+1])
 			s[counter].PublicKey = []byte(lines[i+2])
@@ -51,9 +52,9 @@ func getServers(lines []string, NumberOfGates int, NumberOfServers int) []Server
 	return s
 }
 
-//PosttHandler
+//PostHandler
 func postHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method == "Get" {
+	if r.Method == "POST" {
 		var x RegisterationMessage
 		jsn, err := ioutil.ReadAll(r.Body)
 		if err != nil {
@@ -65,6 +66,28 @@ func postHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		go writeToDS(x, &id)
 
+	}
+}
+
+//GetHandler
+func getHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method == "Get" {
+		var x FunctionInfo
+		jsn, err := ioutil.ReadAll(r.Body)
+		if err != nil {
+			log.Fatal("Error reading", err)
+		}
+		err = json.Unmarshal(jsn, &x)
+		if err != nil {
+			log.Fatal("bad decode", err)
+		}
+		value := getServers(readFromDS(), x.NumberOfGates, x.NumberOfServers)
+		responseJSON, err := json.Marshal(value)
+		if err != nil {
+			fmt.Fprintf(w, "error %s", err)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(responseJSON)
 	}
 }
 
