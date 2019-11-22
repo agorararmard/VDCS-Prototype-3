@@ -50,20 +50,12 @@ func server() {
 }
 
 //GetServersForACycle
-func getServers(lines []string, NumberOfGates int, NumberOfServers int, feePerGate float64) vdcs.CycleMessage {
+func getServers(NumberOfGates int, NumberOfServers int, feePerGate float64) vdcs.CycleMessage {
 	counter := 0
 	var s vdcs.CycleMessage
-	for i := 1; i < len(lines) && counter < NumberOfServers; i += 7 {
-		linesi3, err := strconv.ParseInt(lines[i+3], 10, 64)
-		linesi4, err := strconv.ParseFloat(lines[i+4], 64)
-		if err != nil {
-			panic("Cannot Convert this!")
-		}
-		if lines[i-1] == "Server" && (int(linesi3) >= NumberOfGates) && (linesi4 <= feePerGate) {
-			s.ServersCycle[counter].IP = []byte(lines[i])
-			s.ServersCycle[counter].Port, _ = strconv.Atoi(lines[i+1])
-			s.ServersCycle[counter].PublicKey = []byte(lines[i+2])
-			counter++
+	for k, v := range servers {
+		if v.NumberOfGates >= NumberOfGates && v.FeePerGate <= feePerGate {
+			s.ServersCycle[counter] = v.PartyInfo
 		}
 	}
 	return s
@@ -103,7 +95,7 @@ func getHandler(w http.ResponseWriter, r *http.Request) {
 			log.Fatal("bad decode", err)
 		}
 		fmt.Println("His request: ", x)
-		value := getServers(readFromDS(), x.NumberOfGates, x.NumberOfServers, x.FeePerGate)
+		value := getServers(x.NumberOfGates, x.NumberOfServers, x.FeePerGate)
 		fmt.Println("My Generated Cycle: ", value)
 		responseJSON, err := json.Marshal(value)
 		if err != nil {
