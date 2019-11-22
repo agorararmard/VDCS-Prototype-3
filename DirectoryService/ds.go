@@ -53,7 +53,7 @@ func server() {
 func getServers(NumberOfGates int, NumberOfServers int, feePerGate float64) vdcs.CycleMessage {
 	counter := 0
 	var s vdcs.CycleMessage
-	for k, v := range servers {
+	for _, v := range servers {
 		if v.NumberOfGates >= NumberOfGates && v.FeePerGate <= feePerGate {
 			s.ServersCycle[counter] = v.PartyInfo
 		}
