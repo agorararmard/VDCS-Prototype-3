@@ -21,8 +21,7 @@ import (
 
 // string here is the string conversion of the byte array of Token.TokenGen
 var servers = make(map[string]vdcs.ServerInfo)
-
-var clients map[string]vdcs.ClientInfo
+var clients = make(map[string]vdcs.ClientInfo)
 
 var wg = sync.WaitGroup{}
 var id = 0
@@ -30,15 +29,17 @@ var mypI vdcs.PartyInfo
 
 //not testedddddddddddddddddddddddddddddddddddddddddddd
 func main() {
+	createMap(readFromDS())
 	var sk []byte
 	mypI, sk = vdcs.GetPartyInfo()
 	fmt.Println(mypI, " ", sk)
 	//ReadDS-> if available: read it, else create it
 
-	createEmptyDS()
+	//createEmptyDS()
 	wg.Add(1)
 	go server()
 	wg.Wait()
+
 }
 func server() {
 	http.HandleFunc("/post", postHandler)
@@ -136,6 +137,31 @@ func readFromDS() []string {
 	}
 	return words
 }
+func createMap(lines []string) {
+	var s vdcs.ServerInfo
+	var c vdcs.ClientInfo
+	for i := 1; i < len(lines); i += 7 {
+		if lines[i-1] == "Client" {
+			Port, _ := strconv.Atoi(lines[i+1])
+			c.IP = []byte(lines[i])
+			c.Port = Port
+			c.PublicKey = []byte(lines[i+2])
+			clients[lines[i+5]] = c
+		}
+		if lines[i-1] == "Server" {
+			s.IP = []byte(lines[i])
+			Port, _ := strconv.Atoi(lines[i+1])
+			s.Port = Port
+			s.PublicKey = []byte(lines[i+2])
+			NumberOfGates, _ := strconv.Atoi(lines[i+3])
+			s.NumberOfGates = NumberOfGates
+			FeePerGate, _ := strconv.ParseFloat(lines[i+4], 64)
+			s.FeePerGate = FeePerGate
+			servers[lines[i+5]] = s
+		}
+
+	}
+}
 
 //check if new Server is valid or has already been registered
 func validNewServer(lines []string, k vdcs.ServerInfo) bool {
@@ -226,6 +252,7 @@ func writeToDS(k vdcs.RegisterationMessage, id *int) {
 					break
 
 				}
+				servers[token] = k.Server
 				println("New Server been registered")
 			}
 
@@ -262,6 +289,8 @@ func writeToDS(k vdcs.RegisterationMessage, id *int) {
 					}
 					break
 				}
+				c := vdcs.ClientInfo{k.Server.PartyInfo}
+				clients[token] = c
 				println("New Client been registered")
 			}
 
