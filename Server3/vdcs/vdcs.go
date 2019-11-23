@@ -345,7 +345,7 @@ func Comm(cir string, cID int64, numberOfServers int, feePerGate float64, chVDCS
 		cycleMessage, ok = GetFromDirectory(cycleRequestMessage, DirctoryInfo.IP, DirctoryInfo.Port)
 		if ok == false {
 			print("Retrying to request a cycle...")
-			time.Sleep(500*time.Millisecond)
+			time.Sleep(500 * time.Millisecond)
 		}
 	}
 
@@ -784,7 +784,7 @@ func DecryptMessageAES(key []byte, msg Message) (nMsg Message) {
 
 //RandomSymmKeyGen Generates a random key for the AES algorithm
 func RandomSymmKeyGen() (key []byte) {
-	key = make([]byte, 64)
+	key = make([]byte, 32)
 
 	_, err := cryptoRand.Read(key)
 	if err != nil {

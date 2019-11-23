@@ -774,7 +774,7 @@ func DecryptMessageAES(key []byte, msg Message) (nMsg Message) {
 
 //RandomSymmKeyGen Generates a random key for the AES algorithm
 func RandomSymmKeyGen() (key []byte) {
-	key = make([]byte, 64)
+	key = make([]byte, 32)
 
 	_, err := cryptoRand.Read(key)
 	if err != nil {
