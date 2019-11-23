@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"strconv"
 	"sync"
-
+	"os"
 	"./vdcs"
 )
 
@@ -38,7 +38,11 @@ func server() {
 
 func initServer() {
 	//set whatever to the directory
-	vdcs.SetDirectoryInfo([]byte("10.40.34.185"), 44183)
+	port, err := strconv.ParseInt(os.Args[1], 10, 32)
+	if err != nil {
+		log.Fatal("Error reading commandline arguments", err)
+	}
+	vdcs.SetDirectoryInfo([]byte("127.0.0.1"), int(port))
 
 	//register now
 	ServerRegister(300, 2.4)

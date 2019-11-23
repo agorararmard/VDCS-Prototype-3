@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bufio"
 	"bytes"
 	"encoding/json"
 	"fmt"
@@ -19,6 +18,11 @@ import (
 	"./vdcs"
 )
 
+const (
+	RETRY_MS time.Duration = 500
+)
+
+
 // string here is the string conversion of the byte array of Token.TokenGen
 var servers = make(map[string]vdcs.ServerInfo)
 var clients = make(map[string]vdcs.ClientInfo)
@@ -29,10 +33,9 @@ var mypI vdcs.PartyInfo
 
 //not testedddddddddddddddddddddddddddddddddddddddddddd
 func main() {
-	createMap(readFromDS())
 	var sk []byte
-	mypI, sk = vdcs.GetPartyInfo()
-	fmt.Println(mypI, " ", sk)
+	mypI, sk = vdcs.GetPartyInfo(); _ = sk
+	// fmt.Println(" SK: ", sk, "Ip: ", mypI)
 	//ReadDS-> if available: read it, else create it
 
 	//createEmptyDS()
@@ -45,20 +48,30 @@ func server() {
 	http.HandleFunc("/post", postHandler)
 	http.HandleFunc("/get", getHandler)
 
-	fmt.Println("I'm ready to listen on " + ":" + strconv.Itoa(mypI.Port))
+	fmt.Println("I'm ready to listen on " + ": " + strconv.Itoa(mypI.Port))
 	http.ListenAndServe(":"+strconv.Itoa(mypI.Port), nil)
 }
 
 //GetServersForACycle
 func getServers(NumberOfGates int, NumberOfServers int, feePerGate float64) vdcs.CycleMessage {
 	counter := 0
-	var s vdcs.CycleMessage
+	cyc := make([]vdcs.PartyInfo, NumberOfServers)
+	print("Have ", len(servers), " servers")
 	for _, v := range servers {
-		if v.NumberOfGates >= NumberOfGates && v.FeePerGate <= feePerGate {
-			s.ServersCycle[counter] = v.PartyInfo
+		if true {
+			cyc[counter] = v.PartyInfo
+			counter += 1
+		}
+		if counter >= NumberOfServers {
+			break
 		}
 	}
-	return s
+	s := &vdcs.CycleMessage {
+		TotalFee: 0,
+	}
+	s.Cycle.ServersCycle = cyc
+
+	return *s
 }
 
 //PostHandler
@@ -106,68 +119,6 @@ func getHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-//read Directory Service word by word
-func readFromDS() []string {
-	file, err := os.Open("DirectoryService.txt")
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer file.Close()
-
-	scanner := bufio.NewScanner(file)
-
-	scanner.Split(bufio.ScanWords)
-
-	var words []string
-
-	for scanner.Scan() {
-		words = append(words, scanner.Text())
-	}
-
-	if err := scanner.Err(); err != nil {
-		log.Fatal(err)
-	}
-	return words
-}
-func createMap(lines []string) {
-	var s vdcs.ServerInfo
-	var c vdcs.ClientInfo
-	for i := 1; i < len(lines); i += 7 {
-		if lines[i-1] == "Client" {
-			Port, _ := strconv.Atoi(lines[i+1])
-			c.IP = []byte(lines[i])
-			c.Port = Port
-			c.PublicKey = []byte(lines[i+2])
-			clients[lines[i+5]] = c
-		}
-		if lines[i-1] == "Server" {
-			s.IP = []byte(lines[i])
-			Port, _ := strconv.Atoi(lines[i+1])
-			s.Port = Port
-			s.PublicKey = []byte(lines[i+2])
-			NumberOfGates, _ := strconv.Atoi(lines[i+3])
-			s.NumberOfGates = NumberOfGates
-			FeePerGate, _ := strconv.ParseFloat(lines[i+4], 64)
-			s.FeePerGate = FeePerGate
-			servers[lines[i+5]] = s
-		}
-
-	}
-}
-
-//check if new Server is valid or has already been registered
-func validNewServer(lines []string, k vdcs.ServerInfo) bool {
-	for i := 1; i < len(lines); i += 7 {
-		if lines[i-1] == "Server" {
-			if lines[i+2] == string(k.PublicKey) {
-				return false
-			}
-		}
-	}
-	return true
-
-}
-
 //check if a registered User sends his correct information
 func validRegisteredUser(lines []string, k vdcs.RegisterationMessage, t vdcs.Token) bool {
 	//case Server
@@ -196,9 +147,9 @@ func validRegisteredUser(lines []string, k vdcs.RegisterationMessage, t vdcs.Tok
 
 //CreateToken Create a token challenge
 func CreateToken(token vdcs.Token, publickey []byte) vdcs.Token {
-	fmt.Println(publickey)
+	// fmt.Println(publickey)
 	pk := vdcs.RSAPublicKeyFromBytes(publickey)
-	fmt.Println("Here is what i'm gonna encrypt isA: " + string(token.TokenGen))
+	// fmt.Println("Here is what i'm gonna encrypt isA: " + string(token.TokenGen))
 	ans, err := vdcs.RSAPublicEncrypt(pk, token.TokenGen)
 	if err != nil {
 		panic("Cannot encrypt Token!")
@@ -206,44 +157,36 @@ func CreateToken(token vdcs.Token, publickey []byte) vdcs.Token {
 	return vdcs.Token{TokenGen: ans}
 }
 
+func validNewServer(server vdcs.ServerInfo) bool {
+	// _, ok := servers[.IP]
+	// return ok
+	return true
+}
+
 //Write to Directory Service
 func writeToDS(k vdcs.RegisterationMessage, id *int) {
-	//write new server to the directory service
 	if k.Type == "Server" {
-		if validNewServer(readFromDS(), k.Server) {
-			//		token := string(k.Server.IP) + strconv.FormatInt(int64(k.Server.Port), 10) + string(k.Server.PublicKey) + strconv.FormatInt(int64(k.Server.NumberOfGates), 10) + strconv.FormatFloat(k.Server.FeePerGate, 'f', 6, 64)
-			//		token = strconv.FormatInt(int64(*id), 10) + generateToken(token)
-			token := "Here is The Directory Of Service" + strconv.Itoa(rand.Int())
+		if validNewServer(k.Server) {
+			token := strconv.Itoa(rand.Int())
 			fmt.Println("Here is your token: " + token)
 			var t vdcs.Token
 			t.TokenGen = []byte(token)
-			fmt.Println("Here is your token as byte array: " + string(t.TokenGen))
+			// fmt.Println("Here is your token as byte array: " + string(t.TokenGen))
 
 			t1 := CreateToken(t, k.Server.PublicKey)
 			var success bool = false
+			var t2 vdcs.Token
 			for !success {
 				fmt.Println(k.Server.IP)
 				fmt.Println(k.Server.Port)
-				t2, success := vdcs.GetFromServer(t1, k.Server.IP, k.Server.Port)
-				//fmt.Println("My Token: ", string(t.TokenGen))
-				//fmt.Println("His Token: ", string(t2.TokenGen))
-				//fmt.Println("success: ", success)
-				//fmt.Println(bytes.Compare(t2.TokenGen, t.TokenGen) == 0)
-				if bytes.Compare(t2.TokenGen, t.TokenGen) == 0 && success {
-					*id++
-					f, err := os.OpenFile("DirectoryService.txt", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-					if err != nil {
-						log.Fatal(err)
-					}
-					if _, err := f.Write([]byte("Server " + string(k.Server.IP) + " " + strconv.FormatInt(int64(k.Server.Port), 10) + " " + string(k.Server.PublicKey) + " " + strconv.FormatInt(int64(k.Server.NumberOfGates), 10) + " " + strconv.FormatFloat(k.Server.FeePerGate, 'f', 6, 64) + " " + string(token) + "\n")); err != nil {
-						log.Fatal(err)
-					}
-					if err := f.Close(); err != nil {
-						log.Fatal(err)
-					}
-					break
-
+				t2, success = vdcs.GetFromServer(t1, k.Server.IP, k.Server.Port)
+				if !success {
+					time.Sleep(RETRY_MS * time.Millisecond)
+					println("Retrying...")
 				}
+			}
+			if bytes.Compare(t2.TokenGen, t.TokenGen) == 0 {
+				*id++
 				servers[token] = k.Server
 				println("New Server been registered")
 			}
@@ -252,40 +195,37 @@ func writeToDS(k vdcs.RegisterationMessage, id *int) {
 			println("Server Has already been registered")
 		}
 	} else if k.Type == "Client" {
-		if validNewClient(readFromDS(), k.Server) {
-			//	token := string(k.Server.IP) + strconv.FormatInt(int64(k.Server.Port), 10) + string(k.Server.PublicKey) + strconv.FormatInt(int64(k.Server.NumberOfGates), 10) + strconv.FormatFloat(k.Server.FeePerGate, 'f', 6, 64)
-			//	token = strconv.FormatInt(int64(*id), 10) + generateToken(token)
-			token := "Here is The Directory Of Service" + strconv.Itoa(rand.Int())
+		if validNewClient(k.Server) {
+			token := strconv.Itoa(rand.Int())
 
 			var t vdcs.Token
 			t.TokenGen = []byte(token)
 			t1 := CreateToken(t, k.Server.PublicKey)
 			var success bool = false
+			var t2 vdcs.Token
+			retry_cnt := 6
 			for !success {
-				t2, success := vdcs.GetFromClient(t1, k.Server.IP, k.Server.Port)
+				t2, success = vdcs.GetFromClient(t1, k.Server.IP, k.Server.Port)
 				fmt.Println("My Token: ", string(t.TokenGen))
 				fmt.Println("His Token: ", string(t2.TokenGen))
 				fmt.Println("success: ", success)
 				fmt.Println(bytes.Compare(t2.TokenGen, t.TokenGen) == 0)
-				if bytes.Compare(t2.TokenGen, t.TokenGen) == 0 && success {
-					*id++
-					f, err := os.OpenFile("DirectoryService.txt", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-					if err != nil {
-						log.Fatal(err)
+				if !success {
+					if retry_cnt <= 0 {
+						println("Timing out...")
+						return
 					}
-					if _, err := f.Write([]byte("Client " + string(k.Server.IP) + " " + strconv.FormatInt(int64(k.Server.Port), 10) + " " + string(k.Server.PublicKey) + " " + strconv.FormatInt(int64(k.Server.NumberOfGates), 10) + " " + strconv.FormatFloat(k.Server.FeePerGate, 'f', 6, 64) + " " + string(token) + "\n")); err != nil {
-						log.Fatal(err)
-					}
-					if err := f.Close(); err != nil {
-						log.Fatal(err)
-					}
-					break
+					time.Sleep(RETRY_MS * time.Millisecond)
+					println("Retrying..." , retry_cnt)
+					retry_cnt -= 1
 				}
+			}
+			if bytes.Compare(t2.TokenGen, t.TokenGen) == 0 {
+				*id++
 				c := vdcs.ClientInfo{k.Server.PartyInfo}
 				clients[token] = c
 				println("New Client been registered")
 			}
-
 		} else {
 			println("Client Has already been registered")
 		}
@@ -293,18 +233,8 @@ func writeToDS(k vdcs.RegisterationMessage, id *int) {
 }
 
 //check if new Client is valid or has already been registered
-func validNewClient(lines []string, k vdcs.ServerInfo) bool {
-	for i := 1; i < len(lines); i += 7 {
-		if lines[i-1] == "Client" {
-			if lines[i] == string(k.IP) {
-				return false
-			} else if lines[i+2] == string(k.PublicKey) {
-				return false
-			}
-		}
-	}
+func validNewClient(k vdcs.ServerInfo) bool {
 	return true
-
 }
 
 //break string to array of characters

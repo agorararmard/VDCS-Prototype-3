@@ -4,14 +4,22 @@ import (
 	"bytes"
 	"fmt"
 	"strconv"
-
+	"os"
+	"log"
 	"./vdcs"
+	"time"
 )
 
 func main() {
-	vdcs.SetDirectoryInfo([]byte("10.40.34.185"), 44183)
+	port, err := strconv.ParseInt(os.Args[1], 10, 32)
+	if err != nil {
+		log.Fatal("Error reading commandline arguments", err)
+	}
+	vdcs.SetDirectoryInfo([]byte("127.0.0.1"), int(port))
+
 	vdcs.ClientRegister()
 	go vdcs.ClientHTTP()
+	time.Sleep(5*time.Second)
 	_myEqual_string_1_string_1Ch1 := make(chan vdcs.ChannelContainer)
 	go vdcs.Comm("myEqual_string_1_string_1", 1, 3, 1, _myEqual_string_1_string_1Ch1)
 	_myEqual_string_1_string_1Ch0 := make(chan vdcs.ChannelContainer)
