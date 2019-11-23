@@ -21,6 +21,7 @@ import (
 	"os"
 	"strconv"
 	"sync"
+	"time"
 )
 
 //Wire wire abstraction
@@ -248,8 +249,10 @@ func ClientRegister() {
 			},
 		},
 	}
+	fmt.Println(regMsg)
 	for !SendToDirectory(regMsg, DirctoryInfo.IP, DirctoryInfo.Port) {
 	}
+	print("Sent to dir successfully")
 }
 
 //SolveToken recieves a token challenge and solves it
@@ -266,6 +269,7 @@ func GetHandlerClient(w http.ResponseWriter, r *http.Request) {
 	if r.Method == "GET" {
 		var x Token
 		jsn, err := ioutil.ReadAll(r.Body)
+		print(jsn)
 		if err != nil {
 			log.Fatal("Error reading", err)
 		}
@@ -309,7 +313,9 @@ func PostHandlerClient(w http.ResponseWriter, r *http.Request) {
 func ClientHTTP() {
 	http.HandleFunc("/post", PostHandlerClient)
 	http.HandleFunc("/get", GetHandlerClient)
-	http.ListenAndServe(":"+strconv.Itoa(MyOwnInfo.Port), nil)
+	port := ":" + strconv.Itoa(MyOwnInfo.PartyInfo.Port)
+	print("HTTP serving at ", port)
+	http.ListenAndServe(port, nil)
 }
 
 //Comm basically, the channel will need to send the input/output mapping as well
@@ -337,6 +343,10 @@ func Comm(cir string, cID int64, numberOfServers int, feePerGate float64, chVDCS
 	cycleMessage, ok := GetFromDirectory(cycleRequestMessage, DirctoryInfo.IP, DirctoryInfo.Port)
 	for ok == false {
 		cycleMessage, ok = GetFromDirectory(cycleRequestMessage, DirctoryInfo.IP, DirctoryInfo.Port)
+		if ok == false {
+			print("Retrying to request a cycle...")
+			time.Sleep(500*time.Millisecond)
+		}
 	}
 
 	msgArray, randNess, keys := GenerateMessageArray(cycleMessage, cID, mCirc)
