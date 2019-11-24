@@ -3,11 +3,12 @@ package main
 import (
 	"bytes"
 	"fmt"
-	"strconv"
-	"os"
 	"log"
-	"./vdcs"
+	"os"
+	"strconv"
 	"time"
+
+	"./vdcs"
 )
 
 func main() {
@@ -18,10 +19,12 @@ func main() {
 	vdcs.SetDirectoryInfo([]byte("127.0.0.1"), int(port))
 
 	vdcs.ClientRegister()
+	fmt.Println("Registration Complete!")
 	go vdcs.ClientHTTP()
-	time.Sleep(5*time.Second)
+	time.Sleep(5 * time.Second)
 	_myEqual_string_1_string_1Ch1 := make(chan vdcs.ChannelContainer)
 	go vdcs.Comm("myEqual_string_1_string_1", 1, 3, 1, _myEqual_string_1_string_1Ch1)
+	time.Sleep(5 * time.Second)
 	_myEqual_string_1_string_1Ch0 := make(chan vdcs.ChannelContainer)
 	go vdcs.Comm("myEqual_string_1_string_1", 0, 3, 1, _myEqual_string_1_string_1Ch0)
 
@@ -67,8 +70,8 @@ func eval0(i string, j string, cID int64, chVDCSEvalCircRes <-chan vdcs.ChannelC
 	  myInWires[(idxBit)*2+1] = k.InputWires[(idxBit)*4+2+int(contB)]
 	  }*/
 	message := vdcs.Message{
-		Type:       "Eval",
-		ComID:      vdcs.ComID{CID: strconv.FormatInt(cID, 10)},
+		Type:       []byte("Eval"),
+		ComID:      vdcs.ComID{CID: []byte(strconv.FormatInt(cID, 10))},
 		InputWires: myInWires,
 		NextServer: vdcs.MyOwnInfo.PartyInfo,
 	}
@@ -129,8 +132,8 @@ func eval1(i string, z string, cID int64, chVDCSEvalCircRes <-chan vdcs.ChannelC
 	  myInWires[(idxBit)*2+1] = k.InputWires[(idxBit)*4+2+int(contB)]
 	  }*/
 	message := vdcs.Message{
-		Type:       "Eval",
-		ComID:      vdcs.ComID{CID: strconv.FormatInt(cID, 10)},
+		Type:       []byte("Eval"),
+		ComID:      vdcs.ComID{CID: []byte(strconv.FormatInt(cID, 10))},
 		InputWires: myInWires,
 		NextServer: vdcs.MyOwnInfo.PartyInfo,
 	}

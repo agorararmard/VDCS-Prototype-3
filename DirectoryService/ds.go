@@ -22,7 +22,6 @@ const (
 	RETRY_MS time.Duration = 500
 )
 
-
 // string here is the string conversion of the byte array of Token.TokenGen
 var servers = make(map[string]vdcs.ServerInfo)
 var clients = make(map[string]vdcs.ClientInfo)
@@ -34,7 +33,8 @@ var mypI vdcs.PartyInfo
 //not testedddddddddddddddddddddddddddddddddddddddddddd
 func main() {
 	var sk []byte
-	mypI, sk = vdcs.GetPartyInfo(); _ = sk
+	mypI, sk = vdcs.GetPartyInfo()
+	_ = sk
 	// fmt.Println(" SK: ", sk, "Ip: ", mypI)
 	//ReadDS-> if available: read it, else create it
 
@@ -66,7 +66,7 @@ func getServers(NumberOfGates int, NumberOfServers int, feePerGate float64) vdcs
 			break
 		}
 	}
-	s := &vdcs.CycleMessage {
+	s := &vdcs.CycleMessage{
 		TotalFee: 0,
 	}
 	s.Cycle.ServersCycle = cyc
@@ -122,7 +122,7 @@ func getHandler(w http.ResponseWriter, r *http.Request) {
 //check if a registered User sends his correct information
 func validRegisteredUser(lines []string, k vdcs.RegisterationMessage, t vdcs.Token) bool {
 	//case Server
-	if k.Type == "Server" {
+	if string(k.Type) == "Server" {
 		for i := 1; i < len(lines); i += 7 {
 			if lines[i-1] == "Server" && lines[i] == string(k.Server.IP) && lines[i+2] == string(k.Server.PublicKey) && lines[i+5] == string(t.TokenGen) {
 				return true
@@ -131,7 +131,7 @@ func validRegisteredUser(lines []string, k vdcs.RegisterationMessage, t vdcs.Tok
 		}
 		return false
 	}
-	if k.Type == "Client" {
+	if string(k.Type) == "Client" {
 		//case Client
 		for i := 1; i < len(lines); i += 7 {
 			if lines[i-1] == "Client" && lines[i] == string(k.Server.IP) && lines[i+2] == string(k.Server.PublicKey) && lines[i+5] == string(t.TokenGen) {
@@ -165,7 +165,7 @@ func validNewServer(server vdcs.ServerInfo) bool {
 
 //Write to Directory Service
 func writeToDS(k vdcs.RegisterationMessage, id *int) {
-	if k.Type == "Server" {
+	if string(k.Type) == "Server" {
 		if validNewServer(k.Server) {
 			token := strconv.Itoa(rand.Int())
 			fmt.Println("Here is your token: " + token)
@@ -194,7 +194,7 @@ func writeToDS(k vdcs.RegisterationMessage, id *int) {
 		} else {
 			println("Server Has already been registered")
 		}
-	} else if k.Type == "Client" {
+	} else if string(k.Type) == "Client" {
 		if validNewClient(k.Server) {
 			token := strconv.Itoa(rand.Int())
 
@@ -216,7 +216,7 @@ func writeToDS(k vdcs.RegisterationMessage, id *int) {
 						return
 					}
 					time.Sleep(RETRY_MS * time.Millisecond)
-					println("Retrying..." , retry_cnt)
+					println("Retrying...", retry_cnt)
 					retry_cnt -= 1
 				}
 			}

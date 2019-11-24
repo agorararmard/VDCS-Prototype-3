@@ -6,9 +6,10 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"os"
 	"strconv"
 	"sync"
-	"os"
+
 	"./vdcs"
 )
 
@@ -45,14 +46,14 @@ func initServer() {
 	vdcs.SetDirectoryInfo([]byte("127.0.0.1"), int(port))
 
 	//register now
-	ServerRegister(300, 0)
+	ServerRegister(300, 2.4)
 }
 
 func ServerRegister(numberOfGates int, feePerGate float64) {
 
 	vdcs.SetMyInfo()
 	regMsg := vdcs.RegisterationMessage{
-		Type: "Server",
+		Type: []byte("Server"),
 		Server: vdcs.ServerInfo{
 			PartyInfo: vdcs.MyOwnInfo.PartyInfo,
 			ServerCapabilities: vdcs.ServerCapabilities{
@@ -89,7 +90,47 @@ func getHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func handlePostRequest(x vdcs.MessageArray) {
+	//Decryption
+	sk := vdcs.RSAPrivateKeyFromBytes(vdcs.MyOwnInfo.PrivateKey)
+
+	//fmt.Println("symmetric key encrypted for me: ", x.Keys[0])
+	k, err := vdcs.RSAPrivateDecrypt(sk, x.Keys[0])
+	if err != nil {
+		log.Fatal("Error Decrypting the key", err)
+	}
+	//fmt.Println("symmetric key for me: ", k)
+	//fmt.Println("Encrypted Message Type for me:", x.Array[0].Type) //store the keys somewhere for recovery or pass on channel
+
+	//fmt.Println("Encrypted Message: ", x.Array[0])
+	//saving it so I won't have to decrypt it again in each thread
+	x.Array[0] = vdcs.DecryptMessageAES(k, x.Array[0])
+	fmt.Println("The message to meeee: ", x.Array[0])
+
+	//checking the type
+	reqType := x.Array[0].Type
+	//fmt.Println("msg: ", x.Array[0])
+	fmt.Println("reqType: ", string(reqType), x.Array[0].ComID.CID)
+
+	if string(reqType) == "Garble" {
+		//the garbling thread
+		go garbleLogic(x)
+
+	} else if string(reqType) == "Rerand" {
+		//the rerand thread
+		go rerandLogic(x)
+	} else if string(reqType) == "SEval" {
+		//the eval thread
+		go evalLogic(x.Array[0], string(reqType))
+	} else if string(reqType) == "CEval" {
+		//the thread for the client requesting the result
+		go evalLogic(x.Array[0], string(reqType))
+	}
+
+}
+
 func postHandler(w http.ResponseWriter, r *http.Request) {
+	fmt.Println("Post is invoked server!")
 	if r.Method == "POST" {
 
 		//getting the array of messages
@@ -102,34 +143,7 @@ func postHandler(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			log.Fatal("bad decode", err)
 		}
-
-		//Decryption
-		sk := vdcs.RSAPrivateKeyFromBytes(vdcs.MyOwnInfo.PrivateKey)
-		k, err := vdcs.RSAPrivateDecrypt(sk, x.Keys[0])
-		if err != nil {
-			log.Fatal("Error Decrypting the key", err)
-		}
-		//saving it so I won't have to decrypt it again in each thread
-		x.Array[0] = vdcs.DecryptMessageAES(k, x.Array[0])
-
-		//checking the type
-		reqType := x.Array[0].Type
-
-		if reqType == "Garble" {
-			//the garbling thread
-			go garbleLogic(x)
-
-		} else if reqType == "Rerand" {
-			//the rerand thread
-			go rerandLogic(x)
-		} else if reqType == "SEval" {
-			//the eval thread
-			go evalLogic(x.Array[0], reqType)
-		} else if reqType == "CEval" {
-			//the thread for the client requesting the result
-			go evalLogic(x.Array[0], reqType)
-		}
-
+		go handlePostRequest(x)
 	}
 }
 
@@ -140,7 +154,7 @@ func garbleLogic(arr vdcs.MessageArray) {
 
 	//access the first message which is aleardy decrypted in the post handler
 	x := arr.Array[0]
-
+	//fmt.Println("first message: ", x)
 	//create the circuit message to garble it
 	circM := vdcs.CircuitMessage{
 		Circuit: vdcs.Circuit{
@@ -168,19 +182,22 @@ func garbleLogic(arr vdcs.MessageArray) {
 		ComID: vdcs.ComID{
 			CID: x.CID,
 		},
-		NextServer: arr.Array[0].NextServer,
 	}
+	//fmt.Println("next server: ", mess.NextServer)
 
 	//appending the new message
 	arr.Array = append(arr.Array, mess)
+	//fmt.Println("message array: ", arr.Array)
 
 	//removing the first one
 	arr.Array = append(arr.Array[:0], arr.Array[1:]...)
+	//fmt.Println("message array: ", arr.Array)
+
 	//setting the request type for the next one
-	if len(arr.Array) > 1 {
-		arr.Array[len(arr.Array)-1].Type = "Rerand"
+	if len(arr.Array) > 2 {
+		arr.Array[len(arr.Array)-1].Type = []byte("Rerand")
 	} else {
-		arr.Array[len(arr.Array)-1].Type = "SEval"
+		arr.Array[len(arr.Array)-1].Type = []byte("SEval")
 	}
 
 	//encrypting the message by generating a new key first then using it
@@ -188,7 +205,7 @@ func garbleLogic(arr vdcs.MessageArray) {
 	arr.Array[len(arr.Array)-1] = vdcs.EncryptMessageAES(k, arr.Array[len(arr.Array)-1])
 
 	//encreypting the key used in previous line
-	pk := vdcs.RSAPublicKeyFromBytes(mess.NextServer.PublicKey)
+	pk := vdcs.RSAPublicKeyFromBytes(x.NextServer.PublicKey)
 	key, err := vdcs.RSAPublicEncrypt(pk, k)
 	if err != nil {
 		log.Fatal("Error in decrypting", err)
@@ -199,7 +216,8 @@ func garbleLogic(arr vdcs.MessageArray) {
 	arr.Keys = append(arr.Keys[:0], arr.Keys[1:]...)
 
 	//send to the next server
-	vdcs.SendToServer(arr, mess.NextServer.IP, mess.NextServer.Port)
+	//fmt.Println("Next Server IP & port", x.NextServer.IP, x.NextServer.Port)
+	vdcs.SendToServer(arr, x.NextServer.IP, x.NextServer.Port)
 }
 
 func rerandLogic(arr vdcs.MessageArray) {
@@ -267,9 +285,9 @@ func rerandLogic(arr vdcs.MessageArray) {
 	arr.Array = append(arr.Array, mess)
 	//setting the type of the new message
 	if len(arr.Array) > 1 {
-		arr.Array[len(arr.Array)-1].Type = "Rerand"
+		arr.Array[len(arr.Array)-1].Type = []byte("Rerand")
 	} else {
-		arr.Array[len(arr.Array)-1].Type = "SEval"
+		arr.Array[len(arr.Array)-1].Type = []byte("SEval")
 	}
 
 	//encrypting the message by generating a new key first then using it
@@ -319,13 +337,13 @@ func evalLogic(mess vdcs.Message, reqType string) {
 
 	//check whether this ComID have any pending wires OR Circuts
 	mutexE.Lock()
-	if _, ok := pendingRepo[gm.CID]; ok {
+	if _, ok := pendingRepo[string(gm.CID)]; ok {
 
 		if reqType == "SEval" {
 
 			evalGm := vdcs.GarbledMessage{
 
-				InputWires: in_pendingEval[gm.CID].InputWires,
+				InputWires: in_pendingEval[string(gm.CID)].InputWires,
 
 				OutputWires: gm.OutputWires,
 
@@ -344,8 +362,8 @@ func evalLogic(mess vdcs.Message, reqType string) {
 			}
 
 			//remove the pending from the map
-			delete(pendingRepo, gm.CID)
-			delete(in_pendingEval, gm.CID)
+			delete(pendingRepo, string(gm.CID))
+			delete(in_pendingEval, string(gm.CID))
 			mutexE.Unlock()
 
 			//send them
@@ -357,19 +375,19 @@ func evalLogic(mess vdcs.Message, reqType string) {
 
 			evalGm := vdcs.GarbledMessage{
 				InputWires:  gm.InputWires,
-				OutputWires: gm_pendingEval[gm.CID].OutputWires,
+				OutputWires: gm_pendingEval[string(gm.CID)].OutputWires,
 				GarbledCircuit: vdcs.GarbledCircuit{
-					InputGates:  gm_pendingEval[gm.CID].InputGates,
-					OutputGates: gm_pendingEval[gm.CID].OutputGates,
-					MiddleGates: gm_pendingEval[gm.CID].MiddleGates,
+					InputGates:  gm_pendingEval[string(gm.CID)].InputGates,
+					OutputGates: gm_pendingEval[string(gm.CID)].OutputGates,
+					MiddleGates: gm_pendingEval[string(gm.CID)].MiddleGates,
 					ComID: vdcs.ComID{
-						CID: gm_pendingEval[gm.CID].CID,
+						CID: gm_pendingEval[string(gm.CID)].CID,
 					},
 				},
 			}
 
-			delete(pendingRepo, gm.CID)
-			delete(gm_pendingEval, gm.CID)
+			delete(pendingRepo, string(gm.CID))
+			delete(gm_pendingEval, string(gm.CID))
 			mutexE.Unlock()
 
 			//send them
@@ -380,12 +398,12 @@ func evalLogic(mess vdcs.Message, reqType string) {
 
 	} else {
 		// cid potential problem
-		pendingRepo[gm.CID] = true
+		pendingRepo[string(gm.CID)] = true
 
 		if reqType == "SEval" {
-			gm_pendingEval[gm.CID] = gm
+			gm_pendingEval[string(gm.CID)] = gm
 		} else {
-			in_pendingEval[gm.CID] = gm
+			in_pendingEval[string(gm.CID)] = gm
 		}
 		mutexE.Unlock()
 	}

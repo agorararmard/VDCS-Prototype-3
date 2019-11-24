@@ -21,19 +21,18 @@ import (
 	"os"
 	"strconv"
 	"sync"
-	"time"
 )
 
 //Wire wire abstraction
 type Wire struct {
-	WireID    string `json:"WireID"`
+	WireID    []byte `json:"WireID"`
 	WireLabel []byte `json:"WireLabel"`
 }
 
 //Gate gate abstraction
 type Gate struct {
-	GateID     string   `json:"GateID"`
-	GateInputs []string `json:"GateInputs"`
+	GateID     []byte   `json:"GateID"`
+	GateInputs [][]byte `json:"GateInputs"`
 }
 
 //CircuitGate a gate in a boolean circuit
@@ -50,7 +49,7 @@ type GarbledGate struct {
 
 //ComID computation ID abstraction
 type ComID struct {
-	CID string `json:"ComID"`
+	CID []byte `json:"ComID"`
 }
 
 //Circuit circuit abstraction
@@ -133,7 +132,7 @@ type ClientInfo struct {
 
 //RegisterationMessage a complete registration message
 type RegisterationMessage struct {
-	Type   string     `json:"Type"` //Server, Client
+	Type   []byte     `json:"Type"` //Server, Client
 	Server ServerInfo `json:"ServerInfo"`
 }
 
@@ -162,7 +161,7 @@ type CycleMessage struct {
 
 //Message passed through cycle
 type Message struct {
-	Type string `json:"Type"` //Garble, Rerand, Eval
+	Type []byte `json:"Type"` //Garble, Rerand, Eval
 	Circuit
 	GarbledMessage
 	InputWires []Wire `json:"InputWires"`
@@ -240,7 +239,7 @@ func GetInputSizeOutputSize(circ Circuit) (inputSize int, outputSize int) {
 func ClientRegister() {
 	SetMyInfo()
 	regMsg := RegisterationMessage{
-		Type: "Client",
+		Type: []byte("Client"),
 		Server: ServerInfo{
 			PartyInfo: MyOwnInfo.PartyInfo,
 			ServerCapabilities: ServerCapabilities{
@@ -249,10 +248,8 @@ func ClientRegister() {
 			},
 		},
 	}
-	fmt.Println(regMsg)
 	for !SendToDirectory(regMsg, DirctoryInfo.IP, DirctoryInfo.Port) {
 	}
-	print("Sent to dir successfully")
 }
 
 //SolveToken recieves a token challenge and solves it
@@ -269,7 +266,6 @@ func GetHandlerClient(w http.ResponseWriter, r *http.Request) {
 	if r.Method == "GET" {
 		var x Token
 		jsn, err := ioutil.ReadAll(r.Body)
-		print(jsn)
 		if err != nil {
 			log.Fatal("Error reading", err)
 		}
@@ -313,20 +309,79 @@ func PostHandlerClient(w http.ResponseWriter, r *http.Request) {
 func ClientHTTP() {
 	http.HandleFunc("/post", PostHandlerClient)
 	http.HandleFunc("/get", GetHandlerClient)
-	port := ":" + strconv.Itoa(MyOwnInfo.PartyInfo.Port)
-	print("HTTP serving at ", port)
-	http.ListenAndServe(port, nil)
+	http.ListenAndServe(":"+strconv.Itoa(MyOwnInfo.Port), nil)
+}
+
+//Gate gate abstraction
+type localgate struct {
+	GateID     string   `json:"GateID"`
+	GateInputs []string `json:"GateInputs"`
+}
+
+type localcircuitgate struct {
+	localgate
+	TruthTable []bool `json:"TruthTable"`
+}
+type localcircuit struct {
+	InputGates  []localcircuitgate `json:"InputGates"`
+	MiddleGates []localcircuitgate `json:"MiddleGates"`
+	OutputGates []localcircuitgate `json:"OutputGates"`
+}
+
+func convertLocalToGlobal(lc localcircuit) (c Circuit) {
+	for _, val := range lc.InputGates {
+		tmp := CircuitGate{
+			Gate: Gate{
+				GateID: []byte(val.GateID),
+			},
+			TruthTable: val.TruthTable,
+		}
+
+		for _, val2 := range val.GateInputs {
+			tmp.GateInputs = append(tmp.GateInputs, []byte(val2))
+		}
+		c.InputGates = append(c.InputGates, tmp)
+	}
+
+	for _, val := range lc.MiddleGates {
+		tmp := CircuitGate{
+			Gate: Gate{
+				GateID: []byte(val.GateID),
+			},
+			TruthTable: val.TruthTable,
+		}
+
+		for _, val2 := range val.GateInputs {
+			tmp.GateInputs = append(tmp.GateInputs, []byte(val2))
+		}
+		c.MiddleGates = append(c.MiddleGates, tmp)
+	}
+	for _, val := range lc.OutputGates {
+		tmp := CircuitGate{
+			Gate: Gate{
+				GateID: []byte(val.GateID),
+			},
+			TruthTable: val.TruthTable,
+		}
+		for _, val2 := range val.GateInputs {
+			tmp.GateInputs = append(tmp.GateInputs, []byte(val2))
+		}
+		c.OutputGates = append(c.OutputGates, tmp)
+	}
+	return
 }
 
 //Comm basically, the channel will need to send the input/output mapping as well
 func Comm(cir string, cID int64, numberOfServers int, feePerGate float64, chVDCSCommCircRes chan<- ChannelContainer) {
 	file, _ := ioutil.ReadFile(cir + ".json")
-	mCirc := Circuit{}
-	err := json.Unmarshal([]byte(file), &mCirc) //POSSIBLE BUG
+	localmCirc := localcircuit{}
+	err := json.Unmarshal([]byte(file), &localmCirc) //POSSIBLE BUG
 	if err != nil {
 		log.Fatal(err)
 	}
 	rand.Seed(int64(cID))
+
+	mCirc := convertLocalToGlobal(localmCirc)
 
 	circuitSize := GetCircuitSize(mCirc)
 	cycleRequestMessage := CycleRequestMessage{
@@ -339,19 +394,15 @@ func Comm(cir string, cID int64, numberOfServers int, feePerGate float64, chVDCS
 			},
 		},
 	}
-
+	fmt.Println("I'm ready to request my cycle message!")
 	cycleMessage, ok := GetFromDirectory(cycleRequestMessage, DirctoryInfo.IP, DirctoryInfo.Port)
 	for ok == false {
 		cycleMessage, ok = GetFromDirectory(cycleRequestMessage, DirctoryInfo.IP, DirctoryInfo.Port)
-		if ok == false {
-			print("Retrying to request a cycle...")
-			time.Sleep(500 * time.Millisecond)
-		}
 	}
-
+	fmt.Println("I have received a cycle message!")
 	msgArray, randNess, keys := GenerateMessageArray(cycleMessage, cID, mCirc)
-	fmt.Println(cycleMessage)
-	fmt.Println(keys) //store the keys somewhere for recovery or pass on channel
+	//fmt.Println(cycleMessage)
+	//fmt.Println(keys) //store the keys somewhere for recovery or pass on channel
 
 	ipS1 := cycleMessage.ServersCycle[0].IP
 	portS1 := cycleMessage.ServersCycle[0].Port
@@ -383,12 +434,17 @@ func GenerateMessageArray(cycleMessage CycleMessage, cID int64, circ Circuit) (m
 	rArr = GenerateRandomness(numberOfServers, cID)
 
 	message := Message{
-		Type:       "Garble",
+		Type:       []byte("Garble"),
 		Circuit:    circ,
 		Randomness: rArr[0],
-		ComID:      ComID{CID: strconv.FormatInt(cID, 10)},
+		ComID:      ComID{CID: []byte(strconv.FormatInt(cID, 10))},
 		NextServer: cycleMessage.ServersCycle[1],
 	}
+
+	fmt.Println("message 1 stuff: \n\n", string(message.Type), message.ComID.CID)
+	fmt.Println("message 1 next server ip: \n\n", string(message.NextServer.IP))
+	fmt.Println("message 1 next server port: \n\n", message.NextServer.Port)
+
 	k1 := RandomSymmKeyGen()
 	messageEnc := EncryptMessageAES(k1, message)
 
@@ -406,11 +462,14 @@ func GenerateMessageArray(cycleMessage CycleMessage, cID int64, circ Circuit) (m
 	for i := 1; i < numberOfServers-1; i++ {
 
 		message = Message{
-			Type:       "ReRand",
+			Type:       []byte("ReRand"),
 			Randomness: rArr[i],
-			ComID:      ComID{CID: strconv.FormatInt(cID, 10)},
+			ComID:      ComID{CID: []byte(strconv.FormatInt(cID, 10))},
 			NextServer: cycleMessage.ServersCycle[i+1],
 		}
+		fmt.Println("message 2 stuff: \n\n", string(message.Type), message.ComID.CID)
+		fmt.Println("message 2 next server ip: \n\n", string(message.NextServer.IP))
+		fmt.Println("message 2 next server port: \n\n", message.NextServer.Port)
 
 		k1 = RandomSymmKeyGen()
 		messageEnc = EncryptMessageAES(k1, message)
@@ -429,10 +488,14 @@ func GenerateMessageArray(cycleMessage CycleMessage, cID int64, circ Circuit) (m
 	}
 
 	message = Message{
-		Type:       "SEval",
-		ComID:      ComID{CID: strconv.FormatInt(cID, 10)},
+		Type:       []byte("SEval"),
+		ComID:      ComID{CID: []byte(strconv.FormatInt(cID, 10))},
 		NextServer: MyOwnInfo.PartyInfo,
 	}
+	fmt.Println("message 3 stuff: \n\n", string(message.Type), message.ComID.CID)
+	fmt.Println("message 3 next server ip: \n\n", string(message.NextServer.IP))
+	fmt.Println("message 3 next server port: \n\n", message.NextServer.Port)
+
 	k1 = RandomSymmKeyGen()
 	messageEnc = EncryptMessageAES(k1, message)
 
@@ -461,15 +524,15 @@ func EncryptCircuitGatesAES(key []byte, gates []CircuitGate) []CircuitGate {
 		if !ok {
 			panic("!ok message encryption")
 		}
-		encGates[k].GateID = string(tmp)
+		encGates[k].GateID = tmp
 		//Encrypt gate inputs
-		var concat []string
+		var concat [][]byte
 		for _, val2 := range val.GateInputs {
 			tmp, ok = EncryptAES(key, []byte(val2))
 			if !ok {
 				panic("!ok message encryption")
 			}
-			concat = append(concat, string(tmp))
+			concat = append(concat, tmp)
 		}
 		encGates[k].GateInputs = concat
 		//Encrypt truth table
@@ -489,15 +552,15 @@ func DecryptCircuitGatesAES(key []byte, gates []CircuitGate) []CircuitGate {
 		if !ok {
 			panic("!ok message decryption")
 		}
-		decGates[k].GateID = string(tmp)
+		decGates[k].GateID = tmp
 		//Encrypt gate inputs
-		var concat []string
+		var concat [][]byte
 		for _, val2 := range val.GateInputs {
 			tmp, ok = DecryptAES(key, []byte(val2))
 			if !ok {
 				panic("!ok message decryption")
 			}
-			concat = append(concat, string(tmp))
+			concat = append(concat, tmp)
 		}
 		decGates[k].GateInputs = concat
 		//decrypt truth table
@@ -517,15 +580,15 @@ func EncryptGarbledGatesAES(key []byte, gates []GarbledGate) []GarbledGate {
 		if !ok {
 			panic("!ok message encryption")
 		}
-		encGates[k].GateID = string(tmp)
+		encGates[k].GateID = tmp
 		//Encrypt gate inputs
-		var concat []string
+		var concat [][]byte
 		for _, val2 := range val.GateInputs {
 			tmp, ok = EncryptAES(key, []byte(val2))
 			if !ok {
 				panic("!ok message encryption")
 			}
-			concat = append(concat, string(tmp))
+			concat = append(concat, tmp)
 		}
 		encGates[k].GateInputs = concat
 		//Encrypt GarbledTable
@@ -553,15 +616,15 @@ func DecryptGarbledGatesAES(key []byte, gates []GarbledGate) []GarbledGate {
 		if !ok {
 			panic("!ok message decryption")
 		}
-		decGates[k].GateID = string(tmp)
+		decGates[k].GateID = tmp
 		//Dcrypt gate inputs
-		var concat []string
+		var concat [][]byte
 		for _, val2 := range val.GateInputs {
 			tmp, ok = DecryptAES(key, []byte(val2))
 			if !ok {
 				panic("!ok message decryption")
 			}
-			concat = append(concat, string(tmp))
+			concat = append(concat, tmp)
 		}
 		decGates[k].GateInputs = concat
 		//Decrypt GarbledTable
@@ -633,6 +696,7 @@ func EncryptPartyInfoAES(key []byte, pI PartyInfo) (nPI PartyInfo) {
 		panic("!ok message encryption")
 	}
 	//Encrypt Port
+	nPI.Port = pI.Port
 	//Should be converted into byte array
 	//Encrypt PublicKey
 	nPI.PublicKey, ok = EncryptAES(key, pI.PublicKey)
@@ -646,11 +710,12 @@ func EncryptPartyInfoAES(key []byte, pI PartyInfo) (nPI PartyInfo) {
 func DecryptPartyInfoAES(key []byte, pI PartyInfo) (nPI PartyInfo) {
 	var ok bool
 	//Encrypt IP
-	nPI.IP, ok = EncryptAES(key, pI.IP)
+	nPI.IP, ok = DecryptAES(key, pI.IP)
 	if !ok {
 		panic("!ok message decryption")
 	}
 	//Decrypt Port
+	nPI.Port = pI.Port
 	//Should be converted into byte array
 	//Decrypt PublicKey
 	nPI.PublicKey, ok = DecryptAES(key, pI.PublicKey)
@@ -665,7 +730,7 @@ func EncryptMessageAES(key []byte, msg Message) (nMsg Message) {
 	nMsg = msg
 	var ok bool
 	var tmp []byte
-	if msg.Type == "Garble" {
+	if string(msg.Type) == "Garble" {
 		//Encrypt input gates
 		nMsg.Circuit.InputGates = EncryptCircuitGatesAES(key, msg.Circuit.InputGates)
 		//Encrypt Middle Gates
@@ -676,7 +741,7 @@ func EncryptMessageAES(key []byte, msg Message) (nMsg Message) {
 		nMsg.Randomness = EncryptRandomnessAES(key, msg.Randomness)
 		//Encrypt NextServer Info
 		nMsg.NextServer = EncryptPartyInfoAES(key, msg.NextServer)
-	} else if msg.Type == "ReRand" {
+	} else if string(msg.Type) == "ReRand" {
 		//Encrypt input gates
 		nMsg.GarbledMessage.InputGates = EncryptGarbledGatesAES(key, msg.GarbledMessage.InputGates)
 		//Encrypt middle gates
@@ -691,7 +756,7 @@ func EncryptMessageAES(key []byte, msg Message) (nMsg Message) {
 		nMsg.Randomness = EncryptRandomnessAES(key, msg.Randomness)
 		//Encrypt NextServer Info
 		nMsg.NextServer = EncryptPartyInfoAES(key, msg.NextServer)
-	} else if msg.Type == "SEval" {
+	} else if string(msg.Type) == "SEval" {
 		if len(msg.GarbledMessage.InputGates) != 0 {
 			//Encrypt input gates
 			nMsg.GarbledMessage.InputGates = EncryptGarbledGatesAES(key, msg.GarbledMessage.InputGates)
@@ -703,7 +768,7 @@ func EncryptMessageAES(key []byte, msg Message) (nMsg Message) {
 		}
 		//Encrypt NextServer Info
 		nMsg.NextServer = EncryptPartyInfoAES(key, msg.NextServer)
-	} else if msg.Type == "CEval" {
+	} else if string(msg.Type) == "CEval" {
 		//Encrypt InputWires
 		nMsg.InputWires = EncryptWiresAES(key, msg.InputWires)
 		//Encrypt NextServer Info
@@ -715,7 +780,7 @@ func EncryptMessageAES(key []byte, msg Message) (nMsg Message) {
 	if !ok {
 		panic("!ok message encryption")
 	}
-	nMsg.Type = string(tmp)
+	nMsg.Type = tmp
 
 	return nMsg
 }
@@ -731,9 +796,9 @@ func DecryptMessageAES(key []byte, msg Message) (nMsg Message) {
 	if !ok {
 		panic("!ok message encryption")
 	}
-	nMsg.Type = string(tmp)
+	nMsg.Type = tmp
 
-	if nMsg.Type == "Garble" {
+	if string(nMsg.Type) == "Garble" {
 		//Decrypt input gates
 		nMsg.Circuit.InputGates = DecryptCircuitGatesAES(key, msg.Circuit.InputGates)
 		//Decrypt Middle Gates
@@ -744,7 +809,7 @@ func DecryptMessageAES(key []byte, msg Message) (nMsg Message) {
 		nMsg.Randomness = DecryptRandomnessAES(key, msg.Randomness)
 		//Decrypt NextServer Info
 		nMsg.NextServer = DecryptPartyInfoAES(key, msg.NextServer)
-	} else if nMsg.Type == "ReRand" {
+	} else if string(nMsg.Type) == "ReRand" {
 		//Decrypt input gates
 		nMsg.GarbledMessage.InputGates = DecryptGarbledGatesAES(key, msg.GarbledMessage.InputGates)
 		//Decrypt middle gates
@@ -759,7 +824,7 @@ func DecryptMessageAES(key []byte, msg Message) (nMsg Message) {
 		nMsg.Randomness = DecryptRandomnessAES(key, msg.Randomness)
 		//Decrypt NextServer Info
 		nMsg.NextServer = DecryptPartyInfoAES(key, msg.NextServer)
-	} else if msg.Type == "SEval" {
+	} else if string(msg.Type) == "SEval" {
 		if len(msg.GarbledMessage.InputGates) != 0 {
 			//Decrypt input gates
 			nMsg.GarbledMessage.InputGates = DecryptGarbledGatesAES(key, msg.GarbledMessage.InputGates)
@@ -772,7 +837,7 @@ func DecryptMessageAES(key []byte, msg Message) (nMsg Message) {
 		//Decrypt NextServer Info
 		nMsg.NextServer = DecryptPartyInfoAES(key, msg.NextServer)
 
-	} else if msg.Type == "CEval" {
+	} else if string(msg.Type) == "CEval" {
 		//Decrypt InputWires
 		nMsg.InputWires = DecryptWiresAES(key, msg.InputWires)
 		//Decrypt NextServer Info
@@ -975,7 +1040,7 @@ func SendToServerGarble(k CircuitMessage) bool {
 //GetFromServerGarble used in pt2
 func GetFromServerGarble(id string) (k GarbledMessage, ok bool) {
 	ok = false //assume failure
-	iDJSON, err := json.Marshal(ComID{CID: id})
+	iDJSON, err := json.Marshal(ComID{CID: []byte(id)})
 	req, err := http.NewRequest("GET", "http://localhost:8080/get", bytes.NewBuffer(iDJSON))
 	req.Header.Set("Content-Type", "application/json")
 	client := &http.Client{}
@@ -989,7 +1054,7 @@ func GetFromServerGarble(id string) (k GarbledMessage, ok bool) {
 		return
 	}
 	resp.Body.Close()
-	if k.CID != id {
+	if string(k.CID) != id {
 		panic("The server sent me the wrong circuit") //replace with a request repeat.
 	}
 	ok = true
@@ -1016,7 +1081,7 @@ func SendToServerEval(k GarbledMessage) bool {
 //GetFromServerEval used in pt2
 func GetFromServerEval(id string) (res [][]byte, ok bool) {
 	ok = false // assume failure
-	iDJSON, err := json.Marshal(ComID{CID: id})
+	iDJSON, err := json.Marshal(ComID{CID: []byte(id)})
 	req, err := http.NewRequest("GET", "http://localhost:8081/get", bytes.NewBuffer(iDJSON))
 	req.Header.Set("Content-Type", "application/json")
 	client := &http.Client{}
@@ -1031,7 +1096,7 @@ func GetFromServerEval(id string) (res [][]byte, ok bool) {
 		return
 	}
 	resp.Body.Close()
-	if k.CID != id {
+	if string(k.CID) != id {
 		panic("The server sent me the wrong circuit") //replace with a request repeat.
 	}
 	res = k.Res
@@ -1074,20 +1139,24 @@ func EncryptAES(encKey []byte, plainText []byte) (ciphertext []byte, ok bool) {
 	ok = false //assume failure
 	//			encKey = append(encKey, hash)
 	c, err := aes.NewCipher(encKey)
+	//fmt.Println("cipher enc: ", c)
 	if err != nil {
 		//fmt.Println(err)
 	}
 	gcm, err := cipher.NewGCM(c)
+	//	fmt.Println("gcm enc: ", gcm)
 	if err != nil {
 		//fmt.Println(err)
 		return
 	}
 	nonce := make([]byte, gcm.NonceSize())
+	//fmt.Println("nonce enc: ", nonce)
 	if _, err = io.ReadFull(cryptoRand.Reader, nonce); err != nil {
 		//fmt.Println(err)
 		return
 	}
 	ciphertext = gcm.Seal(nonce, nonce, plainText, nil)
+	//fmt.Println("ciphertext enc: ", ciphertext)
 	//fmt.Println(ciphertext)
 	ok = true
 
@@ -1100,12 +1169,15 @@ func DecryptAES(encKey []byte, cipherText []byte) (plainText []byte, ok bool) {
 	ok = false //assume failure
 
 	c, err := aes.NewCipher(encKey)
+	//fmt.Println("cipher dec: ", c)
 	if err != nil {
 		//fmt.Println(err)
 		return
 	}
 
 	gcm, err := cipher.NewGCM(c)
+	//fmt.Println("gcm dec: ", gcm)
+
 	if err != nil {
 		//fmt.Println(err)
 		return
@@ -1118,7 +1190,12 @@ func DecryptAES(encKey []byte, cipherText []byte) (plainText []byte, ok bool) {
 	}
 
 	nonce, cipherText := cipherText[:nonceSize], cipherText[nonceSize:]
+	//fmt.Println("ciphertext dec: ", cipherText)
+	//fmt.Println("nonce dec: ", nonce)
+
 	plainText, err = gcm.Open(nil, nonce, cipherText, nil)
+	//fmt.Println("plain text dec: ", plainText)
+
 	if err != nil {
 		//fmt.Println(err)
 		return
@@ -1162,10 +1239,10 @@ func Garble(circ CircuitMessage) GarbledMessage {
 
 		//fmt.Printf("%v, %T\n", val.GateID, val.GateID)
 
-		inWires[val.GateID] = []Wire{}
+		inWires[string(val.GateID)] = []Wire{}
 
 		for i := 0; i < inCnt; i++ {
-			inWires[val.GateID] = append(inWires[val.GateID], Wire{
+			inWires[string(val.GateID)] = append(inWires[string(val.GateID)], Wire{
 				WireLabel: arrIn[wInCnt],
 			}, Wire{
 				WireLabel: arrIn[wInCnt+1],
@@ -1177,9 +1254,9 @@ func Garble(circ CircuitMessage) GarbledMessage {
 			})
 			wInCnt += 2
 		}
-		outWires[val.GateID] = []Wire{}
+		outWires[string(val.GateID)] = []Wire{}
 		outWire := GenNRandNumbers(2, circ.LblLength, 0, false)
-		outWires[val.GateID] = append(outWires[val.GateID], Wire{
+		outWires[string(val.GateID)] = append(outWires[string(val.GateID)], Wire{
 			WireLabel: outWire[0],
 		}, Wire{
 			WireLabel: outWire[1],
@@ -1194,7 +1271,7 @@ func Garble(circ CircuitMessage) GarbledMessage {
 			var concat []byte
 			for i := 0; i < inCnt; i++ {
 				idx := ((key >> i) & (1))
-				concat = append(concat, inWires[val.GateID][(i*2)+idx].WireLabel...)
+				concat = append(concat, inWires[string(val.GateID)][(i*2)+idx].WireLabel...)
 			}
 			concat = append(concat, []byte(val.GateID)...)
 			hash := sha256.Sum256(concat)
@@ -1203,7 +1280,7 @@ func Garble(circ CircuitMessage) GarbledMessage {
 			if value {
 				idxOut = 1
 			}
-			outKey := outWires[val.GateID][int(idxOut)]
+			outKey := outWires[string(val.GateID)][int(idxOut)]
 			// generate a new aes cipher using our 32 byte long key
 			encKey := make([]byte, 32)
 			for jk, tmpo := range hash {
@@ -1232,16 +1309,16 @@ func Garble(circ CircuitMessage) GarbledMessage {
 		inCnt := int(math.Log2(float64(len(val.TruthTable))))
 
 		//fmt.Printf("%v, %T\n", val.GateID, val.GateID)
-		inWires[val.GateID] = []Wire{}
+		inWires[string(val.GateID)] = []Wire{}
 
 		for _, j := range val.GateInputs {
-			inWires[val.GateID] = append(inWires[val.GateID], outWires[j][0])
-			inWires[val.GateID] = append(inWires[val.GateID], outWires[j][1])
+			inWires[string(val.GateID)] = append(inWires[string(val.GateID)], outWires[string(j)][0])
+			inWires[string(val.GateID)] = append(inWires[string(val.GateID)], outWires[string(j)][1])
 			//wInCnt++
 		}
-		outWires[val.GateID] = []Wire{}
+		outWires[string(val.GateID)] = []Wire{}
 		outWire := GenNRandNumbers(2, circ.LblLength, 0, false)
-		outWires[val.GateID] = append(outWires[val.GateID], Wire{
+		outWires[string(val.GateID)] = append(outWires[string(val.GateID)], Wire{
 			WireLabel: outWire[0],
 		}, Wire{
 			WireLabel: outWire[1],
@@ -1253,7 +1330,7 @@ func Garble(circ CircuitMessage) GarbledMessage {
 			var concat []byte
 			for i := 0; i < inCnt; i++ {
 				idx := ((key >> i) & (1))
-				concat = append(concat, inWires[val.GateID][(i*2)+idx].WireLabel...)
+				concat = append(concat, inWires[string(val.GateID)][(i*2)+idx].WireLabel...)
 			}
 			concat = append(concat, []byte(val.GateID)...)
 
@@ -1265,7 +1342,7 @@ func Garble(circ CircuitMessage) GarbledMessage {
 			if value {
 				idxOut = 1
 			}
-			outKey := outWires[val.GateID][int(idxOut)]
+			outKey := outWires[string(val.GateID)][int(idxOut)]
 
 			// generate a new aes cipher using our 32 byte long key
 			encKey := make([]byte, 32)
@@ -1296,17 +1373,17 @@ func Garble(circ CircuitMessage) GarbledMessage {
 
 		//fmt.Printf("%v, %T\n", val.GateID, val.GateID)
 
-		inWires[val.GateID] = []Wire{}
+		inWires[string(val.GateID)] = []Wire{}
 		for _, j := range val.GateInputs {
-			inWires[val.GateID] = append(inWires[val.GateID], outWires[j][0])
-			inWires[val.GateID] = append(inWires[val.GateID], outWires[j][1])
+			inWires[string(val.GateID)] = append(inWires[string(val.GateID)], outWires[string(j)][0])
+			inWires[string(val.GateID)] = append(inWires[string(val.GateID)], outWires[string(j)][1])
 
 			//wInCnt++
 		}
 
-		outWires[val.GateID] = []Wire{}
+		outWires[string(val.GateID)] = []Wire{}
 
-		outWires[val.GateID] = append(outWires[val.GateID], Wire{
+		outWires[string(val.GateID)] = append(outWires[string(val.GateID)], Wire{
 			WireLabel: arrOut[wOutCnt],
 		}, Wire{
 			WireLabel: arrOut[wOutCnt+1],
@@ -1324,7 +1401,7 @@ func Garble(circ CircuitMessage) GarbledMessage {
 			var concat []byte
 			for i := 0; i < inCnt; i++ {
 				idx := ((key >> i) & (1))
-				concat = append(concat, inWires[val.GateID][(i*2)+idx].WireLabel...)
+				concat = append(concat, inWires[string(val.GateID)][(i*2)+idx].WireLabel...)
 			}
 			concat = append(concat, []byte(val.GateID)...)
 			hash := sha256.Sum256(concat)
@@ -1333,7 +1410,7 @@ func Garble(circ CircuitMessage) GarbledMessage {
 			if value {
 				idxOut = 1
 			}
-			outKey := outWires[val.GateID][int(idxOut)]
+			outKey := outWires[string(val.GateID)][int(idxOut)]
 			// generate a new aes cipher using our 32 byte long key
 			encKey := make([]byte, 32)
 			for jk, tmpo := range hash {
@@ -1382,18 +1459,18 @@ func Evaluate(gc GarbledMessage) (result ResEval) {
 		for jk, tmpo := range hash {
 			encKey[jk] = tmpo
 		}
-		outWires[val.GateID] = Wire{}
+		outWires[string(val.GateID)] = Wire{}
 		for _, gValue := range val.GarbledValues {
 			tmpWireLabel, ok := DecryptAES(encKey, gValue)
 			if ok {
-				outWires[val.GateID] = Wire{
+				outWires[string(val.GateID)] = Wire{
 					WireLabel: tmpWireLabel,
 				}
 				break
 			}
 		}
 
-		if (bytes.Compare(outWires[val.GateID].WireLabel, Wire{}.WireLabel)) == 0 {
+		if (bytes.Compare(outWires[string(val.GateID)].WireLabel, Wire{}.WireLabel)) == 0 {
 			fmt.Println("Fail Evaluation Input Gate")
 		} /*else {
 			fmt.Println("\n\nYaaay\nGate ", val.GateID, " Now has an output wire: \n", outWires[val.GateID].WireLabel, "\n\n")
@@ -1404,7 +1481,7 @@ func Evaluate(gc GarbledMessage) (result ResEval) {
 		//inCnt := len(val.GateInputs)
 		var concat []byte
 		for _, preGate := range val.GateInputs {
-			concat = append(concat, outWires[preGate].WireLabel...)
+			concat = append(concat, outWires[string(preGate)].WireLabel...)
 			//wInCnt++
 		}
 		concat = append(concat, []byte(val.GateID)...)
@@ -1413,17 +1490,17 @@ func Evaluate(gc GarbledMessage) (result ResEval) {
 		for jk, tmpo := range hash {
 			encKey[jk] = tmpo
 		}
-		outWires[val.GateID] = Wire{}
+		outWires[string(val.GateID)] = Wire{}
 		for _, gValue := range val.GarbledValues {
 			tmpWireLabel, ok := DecryptAES(encKey, gValue)
 			if ok {
-				outWires[val.GateID] = Wire{
+				outWires[string(val.GateID)] = Wire{
 					WireLabel: tmpWireLabel,
 				}
 				break
 			}
 		}
-		if (bytes.Compare(outWires[val.GateID].WireLabel, Wire{}.WireLabel)) == 0 {
+		if (bytes.Compare(outWires[string(val.GateID)].WireLabel, Wire{}.WireLabel)) == 0 {
 			fmt.Println("Fail Evaluation Middle Gate")
 		} /*else {
 			fmt.Println("\n\nYaaay\nGate ", val.GateID, " Now has an output wire: \n", outWires[val.GateID].WireLabel, "\n\n")
@@ -1435,7 +1512,7 @@ func Evaluate(gc GarbledMessage) (result ResEval) {
 		//inCnt := len(val.GateInputs)
 		var concat []byte
 		for _, preGate := range val.GateInputs {
-			concat = append(concat, outWires[preGate].WireLabel...)
+			concat = append(concat, outWires[string(preGate)].WireLabel...)
 			//wInCnt++
 		}
 		concat = append(concat, []byte(val.GateID)...)
@@ -1444,12 +1521,12 @@ func Evaluate(gc GarbledMessage) (result ResEval) {
 		for jk, tmpo := range hash {
 			encKey[jk] = tmpo
 		}
-		outWires[val.GateID] = Wire{}
+		outWires[string(val.GateID)] = Wire{}
 		for _, gValue := range val.GarbledValues {
 			tmpWireLabel, ok := DecryptAES(encKey, gValue)
 			if ok {
 				//fmt.Println("\nI found my way out\n")
-				outWires[val.GateID] = Wire{
+				outWires[string(val.GateID)] = Wire{
 					WireLabel: tmpWireLabel,
 				}
 				result.Res = append(result.Res, tmpWireLabel)
@@ -1458,7 +1535,7 @@ func Evaluate(gc GarbledMessage) (result ResEval) {
 				fmt.Println("\nStill Trying to Find my way out\n")
 			}*/
 		}
-		if (bytes.Compare(outWires[val.GateID].WireLabel, Wire{}.WireLabel)) == 0 {
+		if (bytes.Compare(outWires[string(val.GateID)].WireLabel, Wire{}.WireLabel)) == 0 {
 			fmt.Println("Fail Evaluation Output Gate")
 		} /*else {
 			fmt.Println("\n\nYaaay\nGate ", val.GateID, " Now has an output wire: \n", outWires[val.GateID].WireLabel, "\n\n")
