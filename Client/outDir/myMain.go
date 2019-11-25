@@ -12,6 +12,10 @@ import (
 )
 
 func main() {
+	vdcs.ReadyMutex.Lock()
+	vdcs.ReadyFlag = false
+	vdcs.ReadyMutex.Unlock()
+
 	port, err := strconv.ParseInt(os.Args[1], 10, 32)
 	if err != nil {
 		log.Fatal("Error reading commandline arguments", err)
@@ -78,6 +82,8 @@ func eval0(i string, j string, cID int64, chVDCSEvalCircRes <-chan vdcs.ChannelC
 		InputWires: myInWires,
 		NextServer: vdcs.MyOwnInfo.PartyInfo,
 	}
+	fmt.Println("input wires sent: ", message.InputWires)
+
 	key := vdcs.RandomSymmKeyGen()
 	messageEnc := vdcs.EncryptMessageAES(key, message)
 	nkey, err := vdcs.RSAPublicEncrypt(vdcs.RSAPublicKeyFromBytes(k.PublicKey), key)
@@ -95,13 +101,23 @@ func eval0(i string, j string, cID int64, chVDCSEvalCircRes <-chan vdcs.ChannelC
 	for ok := vdcs.SendToServer(msgArr, k.IP, k.Port); !ok; {
 	}
 	var res vdcs.ResEval
-	vdcs.ReadyMutex.RLock()
-	for vdcs.ReadyFlag {
-		vdcs.ReadyMutex.RUnlock()
+	for true {
 		vdcs.ReadyMutex.RLock()
+		tmpflag := vdcs.ReadyFlag
+		vdcs.ReadyMutex.RUnlock()
+		if tmpflag == true {
+			break
+		}
+		time.Sleep(1 * time.Second)
 	}
+
+	vdcs.ReadyMutex.RLock()
 	res = vdcs.MyResult
 	vdcs.ReadyMutex.RUnlock()
+	vdcs.ReadyMutex.Lock()
+	vdcs.ReadyFlag = false
+	vdcs.ReadyMutex.Unlock()
+	fmt.Println("Recieved result is: ", res)
 	//validate and decode res
 	if bytes.Compare(res.Res[0], k.OutputWires[0].WireLabel) == 0 {
 		return false
@@ -157,13 +173,24 @@ func eval1(i string, z string, cID int64, chVDCSEvalCircRes <-chan vdcs.ChannelC
 	for ok := vdcs.SendToServer(msgArr, k.IP, k.Port); !ok; {
 	}
 	var res vdcs.ResEval
-	vdcs.ReadyMutex.RLock()
-	for vdcs.ReadyFlag {
-		vdcs.ReadyMutex.RUnlock()
+	//Add this to the preprocessor
+	for true {
 		vdcs.ReadyMutex.RLock()
+		tmpflag := vdcs.ReadyFlag
+		vdcs.ReadyMutex.RUnlock()
+		if tmpflag == true {
+			break
+		}
+		time.Sleep(1 * time.Second)
 	}
+
+	vdcs.ReadyMutex.RLock()
 	res = vdcs.MyResult
 	vdcs.ReadyMutex.RUnlock()
+	vdcs.ReadyMutex.Lock()
+	vdcs.ReadyFlag = false
+	vdcs.ReadyMutex.Unlock()
+
 	//validate and decode res
 	if bytes.Compare(res.Res[0], k.OutputWires[0].WireLabel) == 0 {
 		return false

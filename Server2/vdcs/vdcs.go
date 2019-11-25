@@ -340,8 +340,8 @@ func Comm(cir string, cID int64, numberOfServers int, feePerGate float64, chVDCS
 	}
 
 	msgArray, randNess, keys := GenerateMessageArray(cycleMessage, cID, mCirc)
-	//fmt.Println(cycleMessage)
-	//fmt.Println(keys) //store the keys somewhere for recovery or pass on channel
+	fmt.Println(cycleMessage)
+	fmt.Println(keys) //store the keys somewhere for recovery or pass on channel
 
 	ipS1 := cycleMessage.ServersCycle[0].IP
 	portS1 := cycleMessage.ServersCycle[0].Port
@@ -751,7 +751,7 @@ func DecryptMessageAES(key []byte, msg Message) (nMsg Message) {
 		nMsg.Randomness = DecryptRandomnessAES(key, msg.Randomness)
 		//Decrypt NextServer Info
 		nMsg.NextServer = DecryptPartyInfoAES(key, msg.NextServer)
-	} else if string(msg.Type) == "SEval" {
+	} else if string(nMsg.Type) == "SEval" {
 		if len(msg.GarbledMessage.InputGates) != 0 {
 			//Decrypt input gates
 			nMsg.GarbledMessage.InputGates = DecryptGarbledGatesAES(key, msg.GarbledMessage.InputGates)
@@ -764,7 +764,7 @@ func DecryptMessageAES(key []byte, msg Message) (nMsg Message) {
 		//Decrypt NextServer Info
 		nMsg.NextServer = DecryptPartyInfoAES(key, msg.NextServer)
 
-	} else if string(msg.Type) == "CEval" {
+	} else if string(nMsg.Type) == "CEval" {
 		//Decrypt InputWires
 		nMsg.InputWires = DecryptWiresAES(key, msg.InputWires)
 		//Decrypt NextServer Info

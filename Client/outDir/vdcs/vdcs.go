@@ -495,9 +495,12 @@ func GenerateMessageArray(cycleMessage CycleMessage, cID int64, circ Circuit) (m
 	fmt.Println("message 3 stuff: \n\n", string(message.Type), message.ComID.CID)
 	fmt.Println("message 3 next server ip: \n\n", string(message.NextServer.IP))
 	fmt.Println("message 3 next server port: \n\n", message.NextServer.Port)
+	fmt.Println("message 3 next server public key: \n\n", message.NextServer.PublicKey)
 
 	k1 = RandomSymmKeyGen()
 	messageEnc = EncryptMessageAES(k1, message)
+	fmt.Println("\n\nmessage 3 next server public key encrypted: \n\n", messageEnc.NextServer.PublicKey)
+	//	fmt.Println("\n\nmessage 3 next server public key encrypted: \n\n", messageEnc.NextServer.PublicKey)
 
 	keys = append(keys, k1)
 
@@ -756,7 +759,7 @@ func EncryptMessageAES(key []byte, msg Message) (nMsg Message) {
 		nMsg.Randomness = EncryptRandomnessAES(key, msg.Randomness)
 		//Encrypt NextServer Info
 		nMsg.NextServer = EncryptPartyInfoAES(key, msg.NextServer)
-	} else if string(msg.Type) == "SEval" {
+	} else if string(nMsg.Type) == "SEval" {
 		if len(msg.GarbledMessage.InputGates) != 0 {
 			//Encrypt input gates
 			nMsg.GarbledMessage.InputGates = EncryptGarbledGatesAES(key, msg.GarbledMessage.InputGates)
@@ -768,7 +771,7 @@ func EncryptMessageAES(key []byte, msg Message) (nMsg Message) {
 		}
 		//Encrypt NextServer Info
 		nMsg.NextServer = EncryptPartyInfoAES(key, msg.NextServer)
-	} else if string(msg.Type) == "CEval" {
+	} else if string(nMsg.Type) == "CEval" {
 		//Encrypt InputWires
 		nMsg.InputWires = EncryptWiresAES(key, msg.InputWires)
 		//Encrypt NextServer Info
@@ -824,7 +827,7 @@ func DecryptMessageAES(key []byte, msg Message) (nMsg Message) {
 		nMsg.Randomness = DecryptRandomnessAES(key, msg.Randomness)
 		//Decrypt NextServer Info
 		nMsg.NextServer = DecryptPartyInfoAES(key, msg.NextServer)
-	} else if string(msg.Type) == "SEval" {
+	} else if string(nMsg.Type) == "SEval" {
 		if len(msg.GarbledMessage.InputGates) != 0 {
 			//Decrypt input gates
 			nMsg.GarbledMessage.InputGates = DecryptGarbledGatesAES(key, msg.GarbledMessage.InputGates)
@@ -837,13 +840,12 @@ func DecryptMessageAES(key []byte, msg Message) (nMsg Message) {
 		//Decrypt NextServer Info
 		nMsg.NextServer = DecryptPartyInfoAES(key, msg.NextServer)
 
-	} else if string(msg.Type) == "CEval" {
+	} else if string(nMsg.Type) == "CEval" {
 		//Decrypt InputWires
 		nMsg.InputWires = DecryptWiresAES(key, msg.InputWires)
 		//Decrypt NextServer Info
 		nMsg.NextServer = DecryptPartyInfoAES(key, msg.NextServer)
 	}
-
 	return nMsg
 }
 
