@@ -21,6 +21,9 @@ func main() {
 	vdcs.ClientRegister()
 	fmt.Println("Registration Complete!")
 	go vdcs.ClientHTTP()
+	fmt.Println("My IP: ", string(vdcs.MyOwnInfo.IP))
+	fmt.Println("My Port: ", vdcs.MyOwnInfo.Port)
+
 	time.Sleep(5 * time.Second)
 	_myEqual_string_1_string_1Ch1 := make(chan vdcs.ChannelContainer)
 	go vdcs.Comm("myEqual_string_1_string_1", 1, 3, 1, _myEqual_string_1_string_1Ch1)

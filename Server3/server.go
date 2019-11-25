@@ -121,7 +121,20 @@ func handlePostRequest(x vdcs.MessageArray) {
 		go rerandLogic(x)
 	} else if string(reqType) == "SEval" {
 		//the eval thread
-		go evalLogic(x.Array[0], string(reqType))
+		k, err := vdcs.RSAPrivateDecrypt(sk, x.Keys[1])
+		if err != nil {
+			log.Fatal("Error Decrypting the key", err)
+		}
+		x.Array[1] = vdcs.DecryptMessageAES(k, x.Array[1])
+
+		msg := vdcs.Message{
+			Type:           x.Array[0].Type,
+			GarbledMessage: x.Array[1].GarbledMessage,
+			ComID:          x.Array[0].ComID,
+			NextServer:     x.Array[0].NextServer,
+		}
+		fmt.Println("IP of the client before Handling logic: ", string(x.Array[0].NextServer.IP))
+		go evalLogic(msg, string(reqType))
 	} else if string(reqType) == "CEval" {
 		//the thread for the client requesting the result
 		go evalLogic(x.Array[0], string(reqType))
@@ -284,10 +297,6 @@ func rerandLogic(arr vdcs.MessageArray) {
 			CID: x0.CID,
 		},
 	}
-	/*
-		call rerand function on it assume it returns the same (mess) variable
-		NOT YET DONE
-	*/
 
 	//removing the first one
 	arr.Array = append(arr.Array[:0], arr.Array[1:]...)
@@ -383,8 +392,13 @@ func evalLogic(mess vdcs.Message, reqType string) {
 			mutexE.Unlock()
 
 			//send them
-			vdcs.MyResult = vdcs.Evaluate(evalGm)
-			vdcs.SendToClient(vdcs.MyResult, mess.NextServer.IP, mess.NextServer.Port)
+			res := vdcs.Evaluate(evalGm)
+
+			//send to the client
+			fmt.Println("Next Server IP ", string(mess.NextServer.IP))
+			fmt.Println("Next Server port", mess.NextServer.Port)
+
+			vdcs.SendToClient(res, mess.NextServer.IP, mess.NextServer.Port)
 
 			//if the client send the input wires
 		} else {
@@ -407,8 +421,13 @@ func evalLogic(mess vdcs.Message, reqType string) {
 			mutexE.Unlock()
 
 			//send them
-			vdcs.MyResult = vdcs.Evaluate(evalGm)
-			vdcs.SendToClient(vdcs.MyResult, mess.NextServer.IP, mess.NextServer.Port)
+			res := vdcs.Evaluate(evalGm)
+
+			//send to the client
+			fmt.Println("Next Server IP ", string(mess.NextServer.IP))
+			fmt.Println("Next Server port", mess.NextServer.Port)
+
+			vdcs.SendToClient(res, mess.NextServer.IP, mess.NextServer.Port)
 
 		}
 
