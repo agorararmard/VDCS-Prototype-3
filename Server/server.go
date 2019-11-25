@@ -62,13 +62,13 @@ func ServerRegister(numberOfGates int, feePerGate float64) {
 			},
 		},
 	}
-	fmt.Println(regMsg)
+	//fmt.Println(regMsg)
 	for !vdcs.SendToDirectory(regMsg, vdcs.DirctoryInfo.IP, vdcs.DirctoryInfo.Port) {
 	}
 }
 
 func getHandler(w http.ResponseWriter, r *http.Request) {
-	fmt.Println("I'm solving the token right now!")
+	//fmt.Println("I'm solving the token right now!")
 	if r.Method == "GET" {
 		var x vdcs.Token
 		jsn, err := ioutil.ReadAll(r.Body)
@@ -91,7 +91,7 @@ func getHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func handlePostRequest(x vdcs.MessageArray) {
-	fmt.Println("Message Array Size: ", len(x.Array))
+	//fmt.Println("Message Array Size: ", len(x.Array))
 	//Decryption
 	sk := vdcs.RSAPrivateKeyFromBytes(vdcs.MyOwnInfo.PrivateKey)
 
@@ -106,14 +106,14 @@ func handlePostRequest(x vdcs.MessageArray) {
 	//fmt.Println("Encrypted Message: ", x.Array[0])
 	//saving it so I won't have to decrypt it again in each thread
 	x.Array[0] = vdcs.DecryptMessageAES(k, x.Array[0])
-	fmt.Println("The message to meeee: ", x.Array[0])
+	//fmt.Println("The message to meeee: ", x.Array[0])
 
-	fmt.Println("The message to meeee from previous server probably: ", x.Array[len(x.Array)-1])
+	//fmt.Println("The message to meeee from previous server probably: ", x.Array[len(x.Array)-1])
 
 	//checking the type
 	reqType := x.Array[0].Type
-	//fmt.Println("msg: ", x.Array[0])
-	fmt.Println("reqType: ", string(reqType), x.Array[0].ComID.CID)
+	////fmt.Println("msg: ", x.Array[0])
+	//fmt.Println("reqType: ", string(reqType), x.Array[0].ComID.CID)
 
 	if string(reqType) == "Garble" {
 		//the garbling thread
@@ -136,9 +136,9 @@ func handlePostRequest(x vdcs.MessageArray) {
 			ComID:          x.Array[0].ComID,
 			NextServer:     x.Array[0].NextServer,
 		}
-		fmt.Println("IP of the client before Handling logic: ", string(x.Array[0].NextServer.IP))
-		fmt.Println("Public key of the client before Handling logic: ", x.Array[0].NextServer.PublicKey)
-		fmt.Println("Length of the array: ", len(x.Array), "Length of the keys: ", len(x.Keys))
+		//fmt.Println("IP of the client before Handling logic: ", string(x.Array[0].NextServer.IP))
+		//fmt.Println("Public key of the client before Handling logic: ", x.Array[0].NextServer.PublicKey)
+		//fmt.Println("Length of the array: ", len(x.Array), "Length of the keys: ", len(x.Keys))
 		go evalLogic(msg, string(reqType))
 	} else if string(reqType) == "CEval" {
 		//the thread for the client requesting the result
@@ -148,7 +148,7 @@ func handlePostRequest(x vdcs.MessageArray) {
 }
 
 func postHandler(w http.ResponseWriter, r *http.Request) {
-	fmt.Println("Post is invoked server!")
+	//fmt.Println("Post is invoked server!")
 	if r.Method == "POST" {
 
 		//getting the array of messages
@@ -234,38 +234,38 @@ func garbleLogic(arr vdcs.MessageArray) {
 	arr.Keys = append(arr.Keys[:0], arr.Keys[1:]...)
 
 	//send to the next server
-	fmt.Println("Next Server IP ", string(x.NextServer.IP))
-	fmt.Println("Next Server port", x.NextServer.Port)
+	//fmt.Println("Next Server IP ", string(x.NextServer.IP))
+	//fmt.Println("Next Server port", x.NextServer.Port)
 
-	fmt.Println("input gates length sent: ", len(mess.GarbledMessage.InputGates))
-	fmt.Println("middle gates length sent: ", len(mess.GarbledMessage.MiddleGates))
-	fmt.Println("output gates length sent: ", len(mess.GarbledMessage.OutputGates))
+	//fmt.Println("input gates length sent: ", len(mess.GarbledMessage.InputGates))
+	//fmt.Println("middle gates length sent: ", len(mess.GarbledMessage.MiddleGates))
+	//fmt.Println("output gates length sent: ", len(mess.GarbledMessage.OutputGates))
 
-	fmt.Println("input gates length sent encrypted: ", len(arr.Array[len(arr.Array)-1].GarbledMessage.InputGates))
-	fmt.Println("middle gates length sent encrypted: ", len(arr.Array[len(arr.Array)-1].GarbledMessage.MiddleGates))
-	fmt.Println("output gates length sent encrypted: ", len(arr.Array[len(arr.Array)-1].GarbledMessage.OutputGates))
+	//fmt.Println("input gates length sent encrypted: ", len(arr.Array[len(arr.Array)-1].GarbledMessage.InputGates))
+	//fmt.Println("middle gates length sent encrypted: ", len(arr.Array[len(arr.Array)-1].GarbledMessage.MiddleGates))
+	//fmt.Println("output gates length sent encrypted: ", len(arr.Array[len(arr.Array)-1].GarbledMessage.OutputGates))
 
-	fmt.Println("input wires length sent encrypted: ", len(arr.Array[len(arr.Array)-1].GarbledMessage.InputWires))
-	fmt.Println("output wires length sent encrypted: ", len(arr.Array[len(arr.Array)-1].GarbledMessage.OutputWires))
+	//fmt.Println("input wires length sent encrypted: ", len(arr.Array[len(arr.Array)-1].GarbledMessage.InputWires))
+	//fmt.Println("output wires length sent encrypted: ", len(arr.Array[len(arr.Array)-1].GarbledMessage.OutputWires))
 
 	vdcs.SendToServer(arr, x.NextServer.IP, x.NextServer.Port)
 }
 
 func rerandLogic(arr vdcs.MessageArray) {
-	fmt.Println("Message Array Size inside rerandLogic: ", len(arr.Array))
-	fmt.Println("The message sent to me encrypted: ", arr.Array[len(arr.Array)-1])
-	fmt.Println("input gates length sent encrypted: ", len(arr.Array[len(arr.Array)-1].GarbledMessage.InputGates))
-	fmt.Println("middle gates length sent encrypted: ", len(arr.Array[len(arr.Array)-1].GarbledMessage.MiddleGates))
-	fmt.Println("output gates length sent encrypted: ", len(arr.Array[len(arr.Array)-1].GarbledMessage.OutputGates))
+	//fmt.Println("Message Array Size inside rerandLogic: ", len(arr.Array))
+	//fmt.Println("The message sent to me encrypted: ", arr.Array[len(arr.Array)-1])
+	//fmt.Println("input gates length sent encrypted: ", len(arr.Array[len(arr.Array)-1].GarbledMessage.InputGates))
+	//fmt.Println("middle gates length sent encrypted: ", len(arr.Array[len(arr.Array)-1].GarbledMessage.MiddleGates))
+	//fmt.Println("output gates length sent encrypted: ", len(arr.Array[len(arr.Array)-1].GarbledMessage.OutputGates))
 
-	fmt.Println("input wires length sent encrypted: ", len(arr.Array[len(arr.Array)-1].GarbledMessage.InputWires))
-	fmt.Println("output wires length sent encrypted: ", len(arr.Array[len(arr.Array)-1].GarbledMessage.OutputWires))
+	//fmt.Println("input wires length sent encrypted: ", len(arr.Array[len(arr.Array)-1].GarbledMessage.InputWires))
+	//fmt.Println("output wires length sent encrypted: ", len(arr.Array[len(arr.Array)-1].GarbledMessage.OutputWires))
 
-	fmt.Println("CID before encrypt: ", arr.Array[len(arr.Array)-1].ComID)
+	//fmt.Println("CID before encrypt: ", arr.Array[len(arr.Array)-1].ComID)
 	//the first message already decrypted
-	fmt.Println("input gates length sent encrypted first message: ", len(arr.Array[0].GarbledMessage.InputGates))
-	fmt.Println("middle gates length sent encrypted first message: ", len(arr.Array[0].GarbledMessage.MiddleGates))
-	fmt.Println("output gates length sent encrypted first message: ", len(arr.Array[0].GarbledMessage.OutputGates))
+	//fmt.Println("input gates length sent encrypted first message: ", len(arr.Array[0].GarbledMessage.InputGates))
+	//fmt.Println("middle gates length sent encrypted first message: ", len(arr.Array[0].GarbledMessage.MiddleGates))
+	//fmt.Println("output gates length sent encrypted first message: ", len(arr.Array[0].GarbledMessage.OutputGates))
 
 	//the info for the next server
 	// variable-array consistency potential problem
@@ -275,9 +275,9 @@ func rerandLogic(arr vdcs.MessageArray) {
 	x0 := arr.Array[0] //Already decrypted earlier
 	x1 := arr.Array[len(arr.Array)-1]
 
-	fmt.Println("input gates length received: ", len(x1.GarbledMessage.InputGates))
-	fmt.Println("middle gates length received: ", len(x1.GarbledMessage.MiddleGates))
-	fmt.Println("output gates length received: ", len(x1.GarbledMessage.OutputGates))
+	//fmt.Println("input gates length received: ", len(x1.GarbledMessage.InputGates))
+	//fmt.Println("middle gates length received: ", len(x1.GarbledMessage.MiddleGates))
+	//fmt.Println("output gates length received: ", len(x1.GarbledMessage.OutputGates))
 
 	//decrypting x1
 	sk := vdcs.RSAPrivateKeyFromBytes(vdcs.MyOwnInfo.PrivateKey)
@@ -286,10 +286,10 @@ func rerandLogic(arr vdcs.MessageArray) {
 		log.Fatal("Error Decrypting the key", err)
 	}
 	x1 = vdcs.DecryptMessageAES(k, x1) //now x1& x0 are decrypted
-	fmt.Println("The message sent to me decrypted: ", x1)
-	fmt.Println("Type after decrypt: ", string(x1.Type))
+	//fmt.Println("The message sent to me decrypted: ", x1)
+	//fmt.Println("Type after decrypt: ", string(x1.Type))
 
-	fmt.Println("CID after decrypt: ", x1.ComID)
+	//fmt.Println("CID after decrypt: ", x1.ComID)
 
 	// getting the garble message from x1 and the nextserver from x0
 	//Forming a single message out of the two to work with
@@ -323,9 +323,9 @@ func rerandLogic(arr vdcs.MessageArray) {
 			CID: x0.CID,
 		},
 	}
-	fmt.Println("input gates length sent before rerand: ", len(mess.GarbledMessage.InputGates))
-	fmt.Println("middle gates length sent before rerand: ", len(mess.GarbledMessage.MiddleGates))
-	fmt.Println("output gates length sent before rerand: ", len(mess.GarbledMessage.OutputGates))
+	//fmt.Println("input gates length sent before rerand: ", len(mess.GarbledMessage.InputGates))
+	//fmt.Println("middle gates length sent before rerand: ", len(mess.GarbledMessage.MiddleGates))
+	//fmt.Println("output gates length sent before rerand: ", len(mess.GarbledMessage.OutputGates))
 
 	//reranding the garbled circuit
 	ngcm := vdcs.ReRand(mess.GarbledMessage, mess.Randomness)
@@ -339,9 +339,9 @@ func rerandLogic(arr vdcs.MessageArray) {
 		},
 	}
 
-	fmt.Println("input gates length sent after rerand: ", len(nMessage.GarbledMessage.InputGates))
-	fmt.Println("middle gates length sent after rerand: ", len(nMessage.GarbledMessage.MiddleGates))
-	fmt.Println("output gates length sent after rerand: ", len(nMessage.GarbledMessage.OutputGates))
+	//fmt.Println("input gates length sent after rerand: ", len(nMessage.GarbledMessage.InputGates))
+	//fmt.Println("middle gates length sent after rerand: ", len(nMessage.GarbledMessage.MiddleGates))
+	//fmt.Println("output gates length sent after rerand: ", len(nMessage.GarbledMessage.OutputGates))
 
 	//removing the first one
 	arr.Array = append(arr.Array[:0], arr.Array[1:]...)
@@ -375,11 +375,11 @@ func rerandLogic(arr vdcs.MessageArray) {
 	arr.Keys = append(arr.Keys, key)
 
 	//send to the next server
-	fmt.Println("Next Server IP ", string(next.IP))
-	fmt.Println("Next Server port", next.Port)
-	fmt.Println("input gates length sent: ", len(nMessage.GarbledMessage.InputGates))
-	fmt.Println("middle gates length sent: ", len(nMessage.GarbledMessage.MiddleGates))
-	fmt.Println("output gates length sent: ", len(nMessage.GarbledMessage.OutputGates))
+	//fmt.Println("Next Server IP ", string(next.IP))
+	//fmt.Println("Next Server port", next.Port)
+	//fmt.Println("input gates length sent: ", len(nMessage.GarbledMessage.InputGates))
+	//fmt.Println("middle gates length sent: ", len(nMessage.GarbledMessage.MiddleGates))
+	//fmt.Println("output gates length sent: ", len(nMessage.GarbledMessage.OutputGates))
 
 	//send it to the next server.... (from the first message)
 	vdcs.SendToServer(arr, next.IP, next.Port)
@@ -443,14 +443,14 @@ func evalLogic(mess vdcs.Message, reqType string) {
 			res := vdcs.Evaluate(evalGm)
 
 			//send to the client
-			fmt.Println("Next Server IP ", string(mess.NextServer.IP))
-			fmt.Println("Next Server port", mess.NextServer.Port)
-			fmt.Println("result sent is: ", res)
-			fmt.Println("input wires received: ", evalGm.InputWires)
+			//fmt.Println("Next Server IP ", string(mess.NextServer.IP))
+			//fmt.Println("Next Server port", mess.NextServer.Port)
+			//fmt.Println("result sent is: ", res)
+			//fmt.Println("input wires received: ", evalGm.InputWires)
 
-			fmt.Println("input gates length received: ", len(evalGm.InputGates))
-			fmt.Println("middle gates length received: ", len(evalGm.MiddleGates))
-			fmt.Println("output gates length received: ", len(evalGm.OutputGates))
+			//fmt.Println("input gates length received: ", len(evalGm.InputGates))
+			//fmt.Println("middle gates length received: ", len(evalGm.MiddleGates))
+			//fmt.Println("output gates length received: ", len(evalGm.OutputGates))
 
 			vdcs.SendToClient(res, mess.NextServer.IP, mess.NextServer.Port)
 
@@ -478,14 +478,14 @@ func evalLogic(mess vdcs.Message, reqType string) {
 			res := vdcs.Evaluate(evalGm)
 
 			//send to the client
-			fmt.Println("Next Server IP ", string(mess.NextServer.IP))
-			fmt.Println("Next Server port", mess.NextServer.Port)
-			fmt.Println("result sent is: ", res)
-			fmt.Println("input wires received: ", evalGm.InputWires)
+			//fmt.Println("Next Server IP ", string(mess.NextServer.IP))
+			//fmt.Println("Next Server port", mess.NextServer.Port)
+			//fmt.Println("result sent is: ", res)
+			//fmt.Println("input wires received: ", evalGm.InputWires)
 
-			fmt.Println("input gates length received: ", len(evalGm.InputGates))
-			fmt.Println("middle gates length received: ", len(evalGm.MiddleGates))
-			fmt.Println("output gates length received: ", len(evalGm.OutputGates))
+			//fmt.Println("input gates length received: ", len(evalGm.InputGates))
+			//fmt.Println("middle gates length received: ", len(evalGm.MiddleGates))
+			//fmt.Println("output gates length received: ", len(evalGm.OutputGates))
 
 			vdcs.SendToClient(res, mess.NextServer.IP, mess.NextServer.Port)
 

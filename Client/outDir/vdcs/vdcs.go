@@ -184,6 +184,22 @@ type ChannelContainer struct {
 	Keys [][]byte `json:"Keys"`
 }
 
+//local Gate gate abstraction
+type localgate struct {
+	GateID     string   `json:"GateID"`
+	GateInputs []string `json:"GateInputs"`
+}
+
+type localcircuitgate struct {
+	localgate
+	TruthTable []bool `json:"TruthTable"`
+}
+type localcircuit struct {
+	InputGates  []localcircuitgate `json:"InputGates"`
+	MiddleGates []localcircuitgate `json:"MiddleGates"`
+	OutputGates []localcircuitgate `json:"OutputGates"`
+}
+
 //DirctoryInfo Global Variable to store Directory communication info
 var DirctoryInfo = struct {
 	Port int
@@ -232,6 +248,50 @@ func GetCircuitSize(circ Circuit) int {
 func GetInputSizeOutputSize(circ Circuit) (inputSize int, outputSize int) {
 	inputSize = len(circ.InputGates) * 2
 	outputSize = len(circ.OutputGates)
+	return
+}
+
+//convertLocalToGlobal converts local context circuits into global context
+func convertLocalToGlobal(lc localcircuit) (c Circuit) {
+	for _, val := range lc.InputGates {
+		tmp := CircuitGate{
+			Gate: Gate{
+				GateID: []byte(val.GateID),
+			},
+			TruthTable: val.TruthTable,
+		}
+
+		for _, val2 := range val.GateInputs {
+			tmp.GateInputs = append(tmp.GateInputs, []byte(val2))
+		}
+		c.InputGates = append(c.InputGates, tmp)
+	}
+
+	for _, val := range lc.MiddleGates {
+		tmp := CircuitGate{
+			Gate: Gate{
+				GateID: []byte(val.GateID),
+			},
+			TruthTable: val.TruthTable,
+		}
+
+		for _, val2 := range val.GateInputs {
+			tmp.GateInputs = append(tmp.GateInputs, []byte(val2))
+		}
+		c.MiddleGates = append(c.MiddleGates, tmp)
+	}
+	for _, val := range lc.OutputGates {
+		tmp := CircuitGate{
+			Gate: Gate{
+				GateID: []byte(val.GateID),
+			},
+			TruthTable: val.TruthTable,
+		}
+		for _, val2 := range val.GateInputs {
+			tmp.GateInputs = append(tmp.GateInputs, []byte(val2))
+		}
+		c.OutputGates = append(c.OutputGates, tmp)
+	}
 	return
 }
 
@@ -312,65 +372,6 @@ func ClientHTTP() {
 	http.ListenAndServe(":"+strconv.Itoa(MyOwnInfo.Port), nil)
 }
 
-//Gate gate abstraction
-type localgate struct {
-	GateID     string   `json:"GateID"`
-	GateInputs []string `json:"GateInputs"`
-}
-
-type localcircuitgate struct {
-	localgate
-	TruthTable []bool `json:"TruthTable"`
-}
-type localcircuit struct {
-	InputGates  []localcircuitgate `json:"InputGates"`
-	MiddleGates []localcircuitgate `json:"MiddleGates"`
-	OutputGates []localcircuitgate `json:"OutputGates"`
-}
-
-func convertLocalToGlobal(lc localcircuit) (c Circuit) {
-	for _, val := range lc.InputGates {
-		tmp := CircuitGate{
-			Gate: Gate{
-				GateID: []byte(val.GateID),
-			},
-			TruthTable: val.TruthTable,
-		}
-
-		for _, val2 := range val.GateInputs {
-			tmp.GateInputs = append(tmp.GateInputs, []byte(val2))
-		}
-		c.InputGates = append(c.InputGates, tmp)
-	}
-
-	for _, val := range lc.MiddleGates {
-		tmp := CircuitGate{
-			Gate: Gate{
-				GateID: []byte(val.GateID),
-			},
-			TruthTable: val.TruthTable,
-		}
-
-		for _, val2 := range val.GateInputs {
-			tmp.GateInputs = append(tmp.GateInputs, []byte(val2))
-		}
-		c.MiddleGates = append(c.MiddleGates, tmp)
-	}
-	for _, val := range lc.OutputGates {
-		tmp := CircuitGate{
-			Gate: Gate{
-				GateID: []byte(val.GateID),
-			},
-			TruthTable: val.TruthTable,
-		}
-		for _, val2 := range val.GateInputs {
-			tmp.GateInputs = append(tmp.GateInputs, []byte(val2))
-		}
-		c.OutputGates = append(c.OutputGates, tmp)
-	}
-	return
-}
-
 //Comm basically, the channel will need to send the input/output mapping as well
 func Comm(cir string, cID int64, numberOfServers int, feePerGate float64, chVDCSCommCircRes chan<- ChannelContainer) {
 	file, _ := ioutil.ReadFile(cir + ".json")
@@ -394,12 +395,12 @@ func Comm(cir string, cID int64, numberOfServers int, feePerGate float64, chVDCS
 			},
 		},
 	}
-	fmt.Println("I'm ready to request my cycle message!")
+
 	cycleMessage, ok := GetFromDirectory(cycleRequestMessage, DirctoryInfo.IP, DirctoryInfo.Port)
 	for ok == false {
 		cycleMessage, ok = GetFromDirectory(cycleRequestMessage, DirctoryInfo.IP, DirctoryInfo.Port)
 	}
-	fmt.Println("I have received a cycle message!")
+
 	msgArray, randNess, keys := GenerateMessageArray(cycleMessage, cID, mCirc)
 	//fmt.Println(cycleMessage)
 	//fmt.Println(keys) //store the keys somewhere for recovery or pass on channel
@@ -440,11 +441,6 @@ func GenerateMessageArray(cycleMessage CycleMessage, cID int64, circ Circuit) (m
 		ComID:      ComID{CID: []byte(strconv.FormatInt(cID, 10))},
 		NextServer: cycleMessage.ServersCycle[1],
 	}
-
-	fmt.Println("message 1 stuff: \n\n", string(message.Type), message.ComID.CID)
-	fmt.Println("message 1 next server ip: \n\n", string(message.NextServer.IP))
-	fmt.Println("message 1 next server port: \n\n", message.NextServer.Port)
-
 	k1 := RandomSymmKeyGen()
 	messageEnc := EncryptMessageAES(k1, message)
 
@@ -467,9 +463,6 @@ func GenerateMessageArray(cycleMessage CycleMessage, cID int64, circ Circuit) (m
 			ComID:      ComID{CID: []byte(strconv.FormatInt(cID, 10))},
 			NextServer: cycleMessage.ServersCycle[i+1],
 		}
-		fmt.Println("message 2 stuff: \n\n", string(message.Type), message.ComID.CID)
-		fmt.Println("message 2 next server ip: \n\n", string(message.NextServer.IP))
-		fmt.Println("message 2 next server port: \n\n", message.NextServer.Port)
 
 		k1 = RandomSymmKeyGen()
 		messageEnc = EncryptMessageAES(k1, message)
@@ -492,15 +485,8 @@ func GenerateMessageArray(cycleMessage CycleMessage, cID int64, circ Circuit) (m
 		ComID:      ComID{CID: []byte(strconv.FormatInt(cID, 10))},
 		NextServer: MyOwnInfo.PartyInfo,
 	}
-	fmt.Println("message 3 stuff: \n\n", string(message.Type), message.ComID.CID)
-	fmt.Println("message 3 next server ip: \n\n", string(message.NextServer.IP))
-	fmt.Println("message 3 next server port: \n\n", message.NextServer.Port)
-	fmt.Println("message 3 next server public key: \n\n", message.NextServer.PublicKey)
-
 	k1 = RandomSymmKeyGen()
 	messageEnc = EncryptMessageAES(k1, message)
-	fmt.Println("\n\nmessage 3 next server public key encrypted: \n\n", messageEnc.NextServer.PublicKey)
-	//	fmt.Println("\n\nmessage 3 next server public key encrypted: \n\n", messageEnc.NextServer.PublicKey)
 
 	keys = append(keys, k1)
 
@@ -759,7 +745,7 @@ func EncryptMessageAES(key []byte, msg Message) (nMsg Message) {
 		nMsg.Randomness = EncryptRandomnessAES(key, msg.Randomness)
 		//Encrypt NextServer Info
 		nMsg.NextServer = EncryptPartyInfoAES(key, msg.NextServer)
-	} else if string(nMsg.Type) == "SEval" {
+	} else if string(msg.Type) == "SEval" {
 		if len(msg.GarbledMessage.InputGates) != 0 {
 			//Encrypt input gates
 			nMsg.GarbledMessage.InputGates = EncryptGarbledGatesAES(key, msg.GarbledMessage.InputGates)
@@ -771,7 +757,7 @@ func EncryptMessageAES(key []byte, msg Message) (nMsg Message) {
 		}
 		//Encrypt NextServer Info
 		nMsg.NextServer = EncryptPartyInfoAES(key, msg.NextServer)
-	} else if string(nMsg.Type) == "CEval" {
+	} else if string(msg.Type) == "CEval" {
 		//Encrypt InputWires
 		nMsg.InputWires = EncryptWiresAES(key, msg.InputWires)
 		//Encrypt NextServer Info
@@ -846,6 +832,7 @@ func DecryptMessageAES(key []byte, msg Message) (nMsg Message) {
 		//Decrypt NextServer Info
 		nMsg.NextServer = DecryptPartyInfoAES(key, msg.NextServer)
 	}
+
 	return nMsg
 }
 
@@ -1102,7 +1089,7 @@ func GetFromServerEval(id string) (res [][]byte, ok bool) {
 		panic("The server sent me the wrong circuit") //replace with a request repeat.
 	}
 	res = k.Res
-	fmt.Println("Result Returned", k.Res)
+	//fmt.Println("Result Returned", k.Res)
 	ok = true
 	return
 }
@@ -1146,7 +1133,7 @@ func EncryptAES(encKey []byte, plainText []byte) (ciphertext []byte, ok bool) {
 		//fmt.Println(err)
 	}
 	gcm, err := cipher.NewGCM(c)
-	//	fmt.Println("gcm enc: ", gcm)
+	//fmt.Println("gcm enc: ", gcm)
 	if err != nil {
 		//fmt.Println(err)
 		return

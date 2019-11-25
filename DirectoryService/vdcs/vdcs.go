@@ -184,6 +184,22 @@ type ChannelContainer struct {
 	Keys [][]byte `json:"Keys"`
 }
 
+//local Gate gate abstraction
+type localgate struct {
+	GateID     string   `json:"GateID"`
+	GateInputs []string `json:"GateInputs"`
+}
+
+type localcircuitgate struct {
+	localgate
+	TruthTable []bool `json:"TruthTable"`
+}
+type localcircuit struct {
+	InputGates  []localcircuitgate `json:"InputGates"`
+	MiddleGates []localcircuitgate `json:"MiddleGates"`
+	OutputGates []localcircuitgate `json:"OutputGates"`
+}
+
 //DirctoryInfo Global Variable to store Directory communication info
 var DirctoryInfo = struct {
 	Port int
@@ -232,6 +248,50 @@ func GetCircuitSize(circ Circuit) int {
 func GetInputSizeOutputSize(circ Circuit) (inputSize int, outputSize int) {
 	inputSize = len(circ.InputGates) * 2
 	outputSize = len(circ.OutputGates)
+	return
+}
+
+//convertLocalToGlobal converts local context circuits into global context
+func convertLocalToGlobal(lc localcircuit) (c Circuit) {
+	for _, val := range lc.InputGates {
+		tmp := CircuitGate{
+			Gate: Gate{
+				GateID: []byte(val.GateID),
+			},
+			TruthTable: val.TruthTable,
+		}
+
+		for _, val2 := range val.GateInputs {
+			tmp.GateInputs = append(tmp.GateInputs, []byte(val2))
+		}
+		c.InputGates = append(c.InputGates, tmp)
+	}
+
+	for _, val := range lc.MiddleGates {
+		tmp := CircuitGate{
+			Gate: Gate{
+				GateID: []byte(val.GateID),
+			},
+			TruthTable: val.TruthTable,
+		}
+
+		for _, val2 := range val.GateInputs {
+			tmp.GateInputs = append(tmp.GateInputs, []byte(val2))
+		}
+		c.MiddleGates = append(c.MiddleGates, tmp)
+	}
+	for _, val := range lc.OutputGates {
+		tmp := CircuitGate{
+			Gate: Gate{
+				GateID: []byte(val.GateID),
+			},
+			TruthTable: val.TruthTable,
+		}
+		for _, val2 := range val.GateInputs {
+			tmp.GateInputs = append(tmp.GateInputs, []byte(val2))
+		}
+		c.OutputGates = append(c.OutputGates, tmp)
+	}
 	return
 }
 
@@ -315,12 +375,14 @@ func ClientHTTP() {
 //Comm basically, the channel will need to send the input/output mapping as well
 func Comm(cir string, cID int64, numberOfServers int, feePerGate float64, chVDCSCommCircRes chan<- ChannelContainer) {
 	file, _ := ioutil.ReadFile(cir + ".json")
-	mCirc := Circuit{}
-	err := json.Unmarshal([]byte(file), &mCirc) //POSSIBLE BUG
+	localmCirc := localcircuit{}
+	err := json.Unmarshal([]byte(file), &localmCirc) //POSSIBLE BUG
 	if err != nil {
 		log.Fatal(err)
 	}
 	rand.Seed(int64(cID))
+
+	mCirc := convertLocalToGlobal(localmCirc)
 
 	circuitSize := GetCircuitSize(mCirc)
 	cycleRequestMessage := CycleRequestMessage{
@@ -340,8 +402,8 @@ func Comm(cir string, cID int64, numberOfServers int, feePerGate float64, chVDCS
 	}
 
 	msgArray, randNess, keys := GenerateMessageArray(cycleMessage, cID, mCirc)
-	fmt.Println(cycleMessage)
-	fmt.Println(keys) //store the keys somewhere for recovery or pass on channel
+	//fmt.Println(cycleMessage)
+	//fmt.Println(keys) //store the keys somewhere for recovery or pass on channel
 
 	ipS1 := cycleMessage.ServersCycle[0].IP
 	portS1 := cycleMessage.ServersCycle[0].Port
@@ -1027,7 +1089,7 @@ func GetFromServerEval(id string) (res [][]byte, ok bool) {
 		panic("The server sent me the wrong circuit") //replace with a request repeat.
 	}
 	res = k.Res
-	fmt.Println("Result Returned", k.Res)
+	//fmt.Println("Result Returned", k.Res)
 	ok = true
 	return
 }

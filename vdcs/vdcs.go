@@ -251,6 +251,50 @@ func GetInputSizeOutputSize(circ Circuit) (inputSize int, outputSize int) {
 	return
 }
 
+//convertLocalToGlobal converts local context circuits into global context
+func convertLocalToGlobal(lc localcircuit) (c Circuit) {
+	for _, val := range lc.InputGates {
+		tmp := CircuitGate{
+			Gate: Gate{
+				GateID: []byte(val.GateID),
+			},
+			TruthTable: val.TruthTable,
+		}
+
+		for _, val2 := range val.GateInputs {
+			tmp.GateInputs = append(tmp.GateInputs, []byte(val2))
+		}
+		c.InputGates = append(c.InputGates, tmp)
+	}
+
+	for _, val := range lc.MiddleGates {
+		tmp := CircuitGate{
+			Gate: Gate{
+				GateID: []byte(val.GateID),
+			},
+			TruthTable: val.TruthTable,
+		}
+
+		for _, val2 := range val.GateInputs {
+			tmp.GateInputs = append(tmp.GateInputs, []byte(val2))
+		}
+		c.MiddleGates = append(c.MiddleGates, tmp)
+	}
+	for _, val := range lc.OutputGates {
+		tmp := CircuitGate{
+			Gate: Gate{
+				GateID: []byte(val.GateID),
+			},
+			TruthTable: val.TruthTable,
+		}
+		for _, val2 := range val.GateInputs {
+			tmp.GateInputs = append(tmp.GateInputs, []byte(val2))
+		}
+		c.OutputGates = append(c.OutputGates, tmp)
+	}
+	return
+}
+
 //ClientRegister registers a client to directory of service
 func ClientRegister() {
 	SetMyInfo()
@@ -331,12 +375,14 @@ func ClientHTTP() {
 //Comm basically, the channel will need to send the input/output mapping as well
 func Comm(cir string, cID int64, numberOfServers int, feePerGate float64, chVDCSCommCircRes chan<- ChannelContainer) {
 	file, _ := ioutil.ReadFile(cir + ".json")
-	mCirc := Circuit{}
-	err := json.Unmarshal([]byte(file), &mCirc) //POSSIBLE BUG
+	localmCirc := localcircuit{}
+	err := json.Unmarshal([]byte(file), &localmCirc) //POSSIBLE BUG
 	if err != nil {
 		log.Fatal(err)
 	}
 	rand.Seed(int64(cID))
+
+	mCirc := convertLocalToGlobal(localmCirc)
 
 	circuitSize := GetCircuitSize(mCirc)
 	cycleRequestMessage := CycleRequestMessage{
@@ -356,8 +402,8 @@ func Comm(cir string, cID int64, numberOfServers int, feePerGate float64, chVDCS
 	}
 
 	msgArray, randNess, keys := GenerateMessageArray(cycleMessage, cID, mCirc)
-	fmt.Println(cycleMessage)
-	fmt.Println(keys) //store the keys somewhere for recovery or pass on channel
+	//fmt.Println(cycleMessage)
+	//fmt.Println(keys) //store the keys somewhere for recovery or pass on channel
 
 	ipS1 := cycleMessage.ServersCycle[0].IP
 	portS1 := cycleMessage.ServersCycle[0].Port
@@ -1043,7 +1089,7 @@ func GetFromServerEval(id string) (res [][]byte, ok bool) {
 		panic("The server sent me the wrong circuit") //replace with a request repeat.
 	}
 	res = k.Res
-	fmt.Println("Result Returned", k.Res)
+	//fmt.Println("Result Returned", k.Res)
 	ok = true
 	return
 }
