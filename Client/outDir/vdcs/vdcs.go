@@ -1704,3 +1704,8 @@ func GetPartyInfo() (PartyInfo, []byte) {
 	}
 	return pI, BytesFromRSAPrivateKey(sk)
 }
+
+//ReRand does nothing for now
+func ReRand(gcm GarbledMessage, r Randomness) GarbledMessage {
+	return gcm
+}

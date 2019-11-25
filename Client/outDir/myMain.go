@@ -70,7 +70,7 @@ func eval0(i string, j string, cID int64, chVDCSEvalCircRes <-chan vdcs.ChannelC
 	  myInWires[(idxBit)*2+1] = k.InputWires[(idxBit)*4+2+int(contB)]
 	  }*/
 	message := vdcs.Message{
-		Type:       []byte("Eval"),
+		Type:       []byte("CEval"),
 		ComID:      vdcs.ComID{CID: []byte(strconv.FormatInt(cID, 10))},
 		InputWires: myInWires,
 		NextServer: vdcs.MyOwnInfo.PartyInfo,
@@ -132,7 +132,7 @@ func eval1(i string, z string, cID int64, chVDCSEvalCircRes <-chan vdcs.ChannelC
 	  myInWires[(idxBit)*2+1] = k.InputWires[(idxBit)*4+2+int(contB)]
 	  }*/
 	message := vdcs.Message{
-		Type:       []byte("Eval"),
+		Type:       []byte("CEval"),
 		ComID:      vdcs.ComID{CID: []byte(strconv.FormatInt(cID, 10))},
 		InputWires: myInWires,
 		NextServer: vdcs.MyOwnInfo.PartyInfo,

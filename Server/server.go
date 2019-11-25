@@ -116,7 +116,7 @@ func handlePostRequest(x vdcs.MessageArray) {
 		//the garbling thread
 		go garbleLogic(x)
 
-	} else if string(reqType) == "Rerand" {
+	} else if string(reqType) == "ReRand" {
 		//the rerand thread
 		go rerandLogic(x)
 	} else if string(reqType) == "SEval" {
@@ -195,7 +195,7 @@ func garbleLogic(arr vdcs.MessageArray) {
 
 	//setting the request type for the next one
 	if len(arr.Array) > 2 {
-		arr.Array[len(arr.Array)-1].Type = []byte("Rerand")
+		arr.Array[len(arr.Array)-1].Type = []byte("ReRand")
 	} else {
 		arr.Array[len(arr.Array)-1].Type = []byte("SEval")
 	}
@@ -230,7 +230,7 @@ func rerandLogic(arr vdcs.MessageArray) {
 	next := arr.Array[0].NextServer
 
 	//get the last & first Message
-	x0 := arr.Array[0]
+	x0 := arr.Array[0] //Already decrypted earlier
 	x1 := arr.Array[len(arr.Array)-1]
 
 	//decrypting x1
@@ -239,9 +239,10 @@ func rerandLogic(arr vdcs.MessageArray) {
 	if err != nil {
 		log.Fatal("Error Decrypting the key", err)
 	}
-	x1 = vdcs.DecryptMessageAES(k, x1)
+	x1 = vdcs.DecryptMessageAES(k, x1) //now x1& x0 are decrypted
 
 	// getting the garble message from x1 and the nextserver from x0
+	//Forming a single message out of the two to work with
 	mess := vdcs.Message{
 		//from x1
 		GarbledMessage: vdcs.GarbledMessage{
@@ -272,7 +273,17 @@ func rerandLogic(arr vdcs.MessageArray) {
 			CID: x0.CID,
 		},
 	}
+	//reranding the garbled circuit
+	ngcm := vdcs.ReRand(mess.GarbledMessage, mess.Randomness)
+	//newMessage to append
+	nMessage := vdcs.Message{
+		//from reRand
+		GarbledMessage: ngcm,
 
+		ComID: vdcs.ComID{
+			CID: x0.CID,
+		},
+	}
 	/*
 		call rerand function on it assume it returns the same (mess) variable
 		NOT YET DONE
@@ -283,10 +294,10 @@ func rerandLogic(arr vdcs.MessageArray) {
 	//remove the last one
 	arr.Array = arr.Array[:len(arr.Array)-1]
 	//appending the new message
-	arr.Array = append(arr.Array, mess)
+	arr.Array = append(arr.Array, nMessage)
 	//setting the type of the new message
-	if len(arr.Array) > 1 {
-		arr.Array[len(arr.Array)-1].Type = []byte("Rerand")
+	if len(arr.Array) > 2 {
+		arr.Array[len(arr.Array)-1].Type = []byte("ReRand")
 	} else {
 		arr.Array[len(arr.Array)-1].Type = []byte("SEval")
 	}
@@ -308,6 +319,10 @@ func rerandLogic(arr vdcs.MessageArray) {
 	arr.Keys = arr.Keys[:len(arr.Keys)-1]
 	//appending the new message
 	arr.Keys = append(arr.Keys, key)
+
+	//send to the next server
+	fmt.Println("Next Server IP ", string(next.IP))
+	fmt.Println("Next Server port", next.Port)
 
 	//send it to the next server.... (from the first message)
 	vdcs.SendToServer(arr, next.IP, next.Port)
