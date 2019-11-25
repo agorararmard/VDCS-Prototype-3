@@ -28,7 +28,7 @@ var mapImports map[string]bool = map[string]bool{
 
 //const commBlock string = "func comm(cir string,cID int, chVDCSCommCircRes chan<- circuit) {fmt.Println(cir)\nfmt.Println(cID)\n//get the circuit in JSON format\n//Generate input wires\n//post to server\n//Wait for response\nchVDCSCommCircRes<-32\n}"
 //const commBlock string = "func comm(cir string,cID int, chVDCSCommCircRes chan<- GarbledCircuit) {file, _ := ioutil.ReadFile(cir + \".json\")\nk := circuit{}\nerr := json.Unmarshal([]byte(file), &k)\nif err != nil {\nlog.Fatal(err)\n}\nrand.Seed(int64(cID))\nk.CID = strconv.Itoa(rand.Int())\nsendToServerGarble(k)\n//Generate input wires\n//Wait for response\nvar g GarbledCircuit = getFromServerGarble(k.CID)\n//Validate Correctness of result\nchVDCSCommCircRes <- g\n}\n"
-const evalBlock string = "func evalcID int64, chVDCSEvalCircRes <-chan vdcs.ChannelContainer) (bool){\n	//generate input wires for given inputs\nk := <-chVDCSEvalCircRes\n		myInWires := make([]vdcs.Wire, len(_inWire0)*8*2)\nfor idxByte := 0; idxByte < len(_inWire0); idxByte++ {\nfor idxBit := 0; idxBit < 8; idxBit++ {\ncontA := (_inWire0[idxByte] >> idxBit) & 1\nmyInWires[(idxBit+idxByte*8)*2] = k.InputWires[(idxBit+idxByte*8)*4+int(contA)]\ncontB := (_inWire1[idxByte] >> idxBit) & 1\nmyInWires[(idxBit+idxByte*8)*2+1] = k.InputWires[(idxBit+idxByte*8)*4+2+int(contB)]\n}\n}\n/*myInWires := make([]vdcs.Wire, 6)\nfor idxBit := 0; idxBit < 3; idxBit++ {\ncontA := (_inWire0[0] >> idxBit) & 1\nmyInWires[(idxBit)*2] = k.InputWires[(idxBit)*4+int(contA)]\ncontB := (_inWire1[0] >> idxBit) & 1\nmyInWires[(idxBit)*2+1] = k.InputWires[(idxBit)*4+2+int(contB)]\n}*/\nmessage := vdcs.Message{\nType:       []byte(\"CEval\"),\nComID:      vdcs.ComID{CID: []byte(strconv.FormatInt(cID, 10))},\nInputWires: myInWires,\nNextServer: vdcs.MyOwnInfo.PartyInfo,\n}\nkey := vdcs.RandomSymmKeyGen()\nmessageEnc := vdcs.EncryptMessageAES(key, message)\nnkey, err := vdcs.RSAPublicEncrypt(vdcs.RSAPublicKeyFromBytes(k.PublicKey), key)\nif err != nil {\npanic(\"Invalid PublicKey\")\n}\nmTmp := make([]vdcs.Message, 1)\nmTmp[0] = messageEnc\nkTmp := make([][]byte, 1)\nkTmp[0] = nkey\nmsgArr := vdcs.MessageArray{\nArray: mTmp,\nKeys:  kTmp,\n}\nfor ok := vdcs.SendToServer(msgArr, k.IP, k.Port); !ok; {\n}\nvar res vdcs.ResEval\nvdcs.ReadyMutex.RLock()\nfor vdcs.ReadyFlag {\n	vdcs.ReadyMutex.RUnlock()\n	vdcs.ReadyMutex.RLock()\n}\nres = vdcs.MyResult\nvdcs.ReadyMutex.RUnlock()\n//validate and decode res\nif bytes.Compare(res.Res[0], k.OutputWires[0].WireLabel) == 0 {\nreturn false\n} else if bytes.Compare(res.Res[0], k.OutputWires[1].WireLabel) == 0 {\nreturn true\n} else {\npanic(\"The server cheated me while evaluating\")\n}\n}"
+const evalBlock string = "func evalcID int64, chVDCSEvalCircRes <-chan vdcs.ChannelContainer) (bool){\n	//generate input wires for given inputs\nk := <-chVDCSEvalCircRes\n		myInWires := make([]vdcs.Wire, len(_inWire0)*8*2)\nfor idxByte := 0; idxByte < len(_inWire0); idxByte++ {\nfor idxBit := 0; idxBit < 8; idxBit++ {\ncontA := (_inWire0[idxByte] >> idxBit) & 1\nmyInWires[(idxBit+idxByte*8)*2] = k.InputWires[(idxBit+idxByte*8)*4+int(contA)]\ncontB := (_inWire1[idxByte] >> idxBit) & 1\nmyInWires[(idxBit+idxByte*8)*2+1] = k.InputWires[(idxBit+idxByte*8)*4+2+int(contB)]\n}\n}\n/*myInWires := make([]vdcs.Wire, 6)\nfor idxBit := 0; idxBit < 3; idxBit++ {\ncontA := (_inWire0[0] >> idxBit) & 1\nmyInWires[(idxBit)*2] = k.InputWires[(idxBit)*4+int(contA)]\ncontB := (_inWire1[0] >> idxBit) & 1\nmyInWires[(idxBit)*2+1] = k.InputWires[(idxBit)*4+2+int(contB)]\n}*/\nmessage := vdcs.Message{\nType:       []byte(\"CEval\"),\nComID:      vdcs.ComID{CID: []byte(strconv.FormatInt(cID, 10))},\nInputWires: myInWires,\nNextServer: vdcs.MyOwnInfo.PartyInfo,\n}\nkey := vdcs.RandomSymmKeyGen()\nmessageEnc := vdcs.EncryptMessageAES(key, message)\nnkey, err := vdcs.RSAPublicEncrypt(vdcs.RSAPublicKeyFromBytes(k.PublicKey), key)\nif err != nil {\npanic(\"Invalid PublicKey\")\n}\nmTmp := make([]vdcs.Message, 1)\nmTmp[0] = messageEnc\nkTmp := make([][]byte, 1)\nkTmp[0] = nkey\nmsgArr := vdcs.MessageArray{\nArray: mTmp,\nKeys:  kTmp,\n}\nfor ok := vdcs.SendToServer(msgArr, k.IP, k.Port); !ok; {\n}\nvar res vdcs.ResEval\nfor true {\nvdcs.ReadyMutex.RLock()\ntmpflag := vdcs.ReadyFlag\nvdcs.ReadyMutex.RUnlock()\nif tmpflag == true {\nbreak\n}\ntime.Sleep(1 * time.Second)\n}\nvdcs.ReadyMutex.RLock()\nres = vdcs.MyResult\nvdcs.ReadyMutex.RUnlock()\nvdcs.ReadyMutex.Lock()\nvdcs.ReadyFlag = false\nvdcs.ReadyMutex.Unlock()\n//validate and decode res\nif bytes.Compare(res.Res[0], k.OutputWires[0].WireLabel) == 0 {\nreturn false\n} else if bytes.Compare(res.Res[0], k.OutputWires[1].WireLabel) == 0 {\nreturn true\n} else {\npanic(\"The server cheated me while evaluating\")\n}\n}"
 
 //const sendToGarbleBlock string = "func sendToServerGarble(k circuit) bool {\ncircuitJSON, err := json.Marshal(k)\nreq, err := http.NewRequest(\"POST\", \"http://localhost:8080/post\", bytes.NewBuffer(circuitJSON))\nreq.Header.Set(\"Content-Type\", \"application/json\")\nclient := &http.Client{}\nresp, err := client.Do(req)\nresp.Body.Close()\nif err != nil {\nlog.Fatal(err)\nreturn false\n}\nreturn true\n}\n"
 //const getFromGarbleBlock string = "func getFromServerGarble(id string) (k GarbledCircuit) {\niDJSON, err := json.Marshal(ComID{CID: id})\nreq, err := http.NewRequest(\"GET\", \"http://localhost:8080/get\", bytes.NewBuffer(iDJSON))\nreq.Header.Set(\"Content-Type\", \"application/json\")\nclient := &http.Client{}\nresp, err := client.Do(req)\nif err != nil {\nlog.Fatal(err)\n}\nbody, err := ioutil.ReadAll(resp.Body)\nerr = json.Unmarshal(body, &k)\nif err != nil {\nlog.Fatal(err)\n}\nresp.Body.Close()\nreturn\n}\n"
@@ -84,9 +84,9 @@ func main() {
 		if strings.Contains(proc[i], "func main(") == true {
 			mainIdx = i
 			proc = addHTTP(proc, mainIdx)
-			i += 2
-			loopLen += 2
-			mainIdx += 2
+			i += 8
+			loopLen += 8
+			mainIdx += 8
 		}
 
 		if strings.Contains(proc[i], "//VDCS") == true {
@@ -148,14 +148,14 @@ func addImports(s []string, idx int) []string {
 }
 
 func addHTTP(s []string, mainIdx int) []string {
-	var addition string = "vdcs.ClientRegister()\ngo vdcs.ClientHTTP()\n"
+	var addition string = "vdcs.ReadyMutex.Lock()\nvdcs.ReadyFlag = false\nvdcs.ReadyMutex.Unlock()\nport, err := strconv.ParseInt(os.Args[1], 10, 32)\nif err != nil {log.Fatal(\"Error reading commandline arguments\", err)}\nvdcs.SetDirectoryInfo([]byte(\"127.0.0.1\"), int(port))\nvdcs.ClientRegister()\ngo vdcs.ClientHTTP()\n"
 	s = append(s[:mainIdx+1], append(strings.Split(addition, "\n"), s[mainIdx+1:]...)...)
 	return s
 }
 
 func addComm(s []string, circ string, mainIdx int) ([]string, string) {
 	var chName string = "_" + circ + "Ch" + strconv.Itoa(goCnt)
-	var call string = chName + ":= make(chan vdcs.ChannelContainer)\ngo vdcs.Comm" + "(\"" + circ + "\"," + strconv.Itoa(goCnt) + ",4,1," + chName + ")"
+	var call string = chName + ":= make(chan vdcs.ChannelContainer)\ngo vdcs.Comm" + "(\"" + circ + "\"," + strconv.Itoa(goCnt) + ",3,1," + chName + ")"
 	//+ strconv.Itoa(goCnt) + was deleted from the above line
 	//fmt.Println(call)
 	s = append(s[:mainIdx+1], append(strings.Split(call, "\n"), s[mainIdx+1:]...)...)

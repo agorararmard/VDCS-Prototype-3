@@ -15,23 +15,15 @@ func main() {
 	vdcs.ReadyMutex.Lock()
 	vdcs.ReadyFlag = false
 	vdcs.ReadyMutex.Unlock()
-
 	port, err := strconv.ParseInt(os.Args[1], 10, 32)
 	if err != nil {
 		log.Fatal("Error reading commandline arguments", err)
 	}
 	vdcs.SetDirectoryInfo([]byte("127.0.0.1"), int(port))
-
 	vdcs.ClientRegister()
-	fmt.Println("Registration Complete!")
 	go vdcs.ClientHTTP()
-	fmt.Println("My IP: ", string(vdcs.MyOwnInfo.IP))
-	fmt.Println("My Port: ", vdcs.MyOwnInfo.Port)
-
-	time.Sleep(5 * time.Second)
 	_myEqual_string_1_string_1Ch1 := make(chan vdcs.ChannelContainer)
 	go vdcs.Comm("myEqual_string_1_string_1", 1, 3, 1, _myEqual_string_1_string_1Ch1)
-	time.Sleep(5 * time.Second)
 	_myEqual_string_1_string_1Ch0 := make(chan vdcs.ChannelContainer)
 	go vdcs.Comm("myEqual_string_1_string_1", 0, 3, 1, _myEqual_string_1_string_1Ch0)
 
@@ -82,8 +74,6 @@ func eval0(i string, j string, cID int64, chVDCSEvalCircRes <-chan vdcs.ChannelC
 		InputWires: myInWires,
 		NextServer: vdcs.MyOwnInfo.PartyInfo,
 	}
-	fmt.Println("input wires sent: ", message.InputWires)
-
 	key := vdcs.RandomSymmKeyGen()
 	messageEnc := vdcs.EncryptMessageAES(key, message)
 	nkey, err := vdcs.RSAPublicEncrypt(vdcs.RSAPublicKeyFromBytes(k.PublicKey), key)
@@ -110,14 +100,12 @@ func eval0(i string, j string, cID int64, chVDCSEvalCircRes <-chan vdcs.ChannelC
 		}
 		time.Sleep(1 * time.Second)
 	}
-
 	vdcs.ReadyMutex.RLock()
 	res = vdcs.MyResult
 	vdcs.ReadyMutex.RUnlock()
 	vdcs.ReadyMutex.Lock()
 	vdcs.ReadyFlag = false
 	vdcs.ReadyMutex.Unlock()
-	fmt.Println("Recieved result is: ", res)
 	//validate and decode res
 	if bytes.Compare(res.Res[0], k.OutputWires[0].WireLabel) == 0 {
 		return false
@@ -173,7 +161,6 @@ func eval1(i string, z string, cID int64, chVDCSEvalCircRes <-chan vdcs.ChannelC
 	for ok := vdcs.SendToServer(msgArr, k.IP, k.Port); !ok; {
 	}
 	var res vdcs.ResEval
-	//Add this to the preprocessor
 	for true {
 		vdcs.ReadyMutex.RLock()
 		tmpflag := vdcs.ReadyFlag
@@ -183,14 +170,12 @@ func eval1(i string, z string, cID int64, chVDCSEvalCircRes <-chan vdcs.ChannelC
 		}
 		time.Sleep(1 * time.Second)
 	}
-
 	vdcs.ReadyMutex.RLock()
 	res = vdcs.MyResult
 	vdcs.ReadyMutex.RUnlock()
 	vdcs.ReadyMutex.Lock()
 	vdcs.ReadyFlag = false
 	vdcs.ReadyMutex.Unlock()
-
 	//validate and decode res
 	if bytes.Compare(res.Res[0], k.OutputWires[0].WireLabel) == 0 {
 		return false

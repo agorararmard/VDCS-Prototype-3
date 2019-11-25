@@ -108,6 +108,8 @@ func handlePostRequest(x vdcs.MessageArray) {
 	x.Array[0] = vdcs.DecryptMessageAES(k, x.Array[0])
 	fmt.Println("The message to meeee: ", x.Array[0])
 
+	fmt.Println("The message to meeee from previous server probably: ", x.Array[len(x.Array)-1])
+
 	//checking the type
 	reqType := x.Array[0].Type
 	//fmt.Println("msg: ", x.Array[0])
@@ -243,12 +245,27 @@ func garbleLogic(arr vdcs.MessageArray) {
 	fmt.Println("middle gates length sent encrypted: ", len(arr.Array[len(arr.Array)-1].GarbledMessage.MiddleGates))
 	fmt.Println("output gates length sent encrypted: ", len(arr.Array[len(arr.Array)-1].GarbledMessage.OutputGates))
 
+	fmt.Println("input wires length sent encrypted: ", len(arr.Array[len(arr.Array)-1].GarbledMessage.InputWires))
+	fmt.Println("output wires length sent encrypted: ", len(arr.Array[len(arr.Array)-1].GarbledMessage.OutputWires))
+
 	vdcs.SendToServer(arr, x.NextServer.IP, x.NextServer.Port)
 }
 
 func rerandLogic(arr vdcs.MessageArray) {
+	fmt.Println("Message Array Size inside rerandLogic: ", len(arr.Array))
+	fmt.Println("The message sent to me encrypted: ", arr.Array[len(arr.Array)-1])
+	fmt.Println("input gates length sent encrypted: ", len(arr.Array[len(arr.Array)-1].GarbledMessage.InputGates))
+	fmt.Println("middle gates length sent encrypted: ", len(arr.Array[len(arr.Array)-1].GarbledMessage.MiddleGates))
+	fmt.Println("output gates length sent encrypted: ", len(arr.Array[len(arr.Array)-1].GarbledMessage.OutputGates))
 
+	fmt.Println("input wires length sent encrypted: ", len(arr.Array[len(arr.Array)-1].GarbledMessage.InputWires))
+	fmt.Println("output wires length sent encrypted: ", len(arr.Array[len(arr.Array)-1].GarbledMessage.OutputWires))
+
+	fmt.Println("CID before encrypt: ", arr.Array[len(arr.Array)-1].ComID)
 	//the first message already decrypted
+	fmt.Println("input gates length sent encrypted first message: ", len(arr.Array[0].GarbledMessage.InputGates))
+	fmt.Println("middle gates length sent encrypted first message: ", len(arr.Array[0].GarbledMessage.MiddleGates))
+	fmt.Println("output gates length sent encrypted first message: ", len(arr.Array[0].GarbledMessage.OutputGates))
 
 	//the info for the next server
 	// variable-array consistency potential problem
@@ -269,6 +286,10 @@ func rerandLogic(arr vdcs.MessageArray) {
 		log.Fatal("Error Decrypting the key", err)
 	}
 	x1 = vdcs.DecryptMessageAES(k, x1) //now x1& x0 are decrypted
+	fmt.Println("The message sent to me decrypted: ", x1)
+	fmt.Println("Type after decrypt: ", string(x1.Type))
+
+	fmt.Println("CID after decrypt: ", x1.ComID)
 
 	// getting the garble message from x1 and the nextserver from x0
 	//Forming a single message out of the two to work with

@@ -54,9 +54,9 @@ type ComID struct {
 
 //Circuit circuit abstraction
 type Circuit struct {
-	InputGates  []CircuitGate `json:"InputGates"`
-	MiddleGates []CircuitGate `json:"MiddleGates"`
-	OutputGates []CircuitGate `json:"OutputGates"`
+	InputGates  []CircuitGate `json:"CircuitInputGates"`
+	MiddleGates []CircuitGate `json:"CircuitMiddleGates"`
+	OutputGates []CircuitGate `json:"CircuitOutputGates"`
 }
 
 //Randomness container for randomness
@@ -76,17 +76,17 @@ type CircuitMessage struct {
 
 //GarbledCircuit garbled circuit abstraction
 type GarbledCircuit struct {
-	InputGates  []GarbledGate `json:"InputGates"`
-	MiddleGates []GarbledGate `json:"MiddleGates"`
-	OutputGates []GarbledGate `json:"OutputGates"`
+	InputGates  []GarbledGate `json:"GarbledInputGates"`
+	MiddleGates []GarbledGate `json:"GarbledMiddleGates"`
+	OutputGates []GarbledGate `json:"GarbledOutputGates"`
 	ComID
 }
 
 //GarbledMessage complete garbled circuit message
 type GarbledMessage struct {
-	InputWires []Wire `json:"InputWires"`
+	InputWires []Wire `json:"GarbledInputWires"`
 	GarbledCircuit
-	OutputWires []Wire `json:"OutputWires"`
+	OutputWires []Wire `json:"GarbledOutputWires"`
 }
 
 //ResEval evaluation result abstraction
@@ -164,7 +164,7 @@ type Message struct {
 	Type []byte `json:"Type"` //Garble, Rerand, Eval
 	Circuit
 	GarbledMessage
-	InputWires []Wire `json:"InputWires"`
+	InputWires []Wire `json:"GeneralInputWires"`
 	Randomness
 	ComID
 	NextServer PartyInfo `json:"NextServer"`
@@ -831,7 +831,12 @@ func CompareWires(gcm GarbledMessage, arrIn [][]byte, arrOut [][]byte) bool {
 
 //SendToServer Invokes the post method on the server
 func SendToServer(k MessageArray, ip []byte, port int) bool {
+	fmt.Println("Array length inside SendToServer: ", len(k.Array))
+	fmt.Println("length of input gates inside SendToServer: ", len(k.Array[len(k.Array)-1].GarbledMessage.InputGates))
+	fmt.Println("length of middle gates inside SendToServer: ", len(k.Array[len(k.Array)-1].GarbledMessage.MiddleGates))
+	fmt.Println("length of output gates inside SendToServer: ", len(k.Array[len(k.Array)-1].GarbledMessage.OutputGates))
 	circuitJSON, err := json.Marshal(k)
+	fmt.Println("The marshelled object: ", circuitJSON)
 	req, err := http.NewRequest("POST", "http://"+string(ip)+":"+strconv.Itoa(port)+"/post", bytes.NewBuffer(circuitJSON))
 	if err != nil {
 		fmt.Println("generating request failed")
@@ -840,6 +845,15 @@ func SendToServer(k MessageArray, ip []byte, port int) bool {
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	resp.Body.Close()
+	var mK MessageArray
+	err = json.Unmarshal(circuitJSON, &mK)
+	fmt.Println("Array length inside SendToServer after: ", len(mK.Array))
+	fmt.Println("length of input gates inside SendToServer after: ", len(mK.Array[len(mK.Array)-1].GarbledMessage.InputGates))
+	fmt.Println("length of middle gates inside SendToServer after: ", len(mK.Array[len(mK.Array)-1].GarbledMessage.MiddleGates))
+	fmt.Println("length of output gates inside SendToServer after: ", len(mK.Array[len(mK.Array)-1].GarbledMessage.OutputGates))
+	fmt.Println("length of input wires inside SendToServer after: ", len(mK.Array[len(mK.Array)-1].GarbledMessage.InputWires))
+	fmt.Println("length of output wires inside SendToServer after: ", len(mK.Array[len(mK.Array)-1].GarbledMessage.OutputWires))
+
 	if err != nil {
 		//log.Fatal(err)
 		return false
@@ -990,6 +1004,7 @@ func GetFromServerGarble(id string) (k GarbledMessage, ok bool) {
 
 //SendToServerEval used in pt2
 func SendToServerEval(k GarbledMessage) bool {
+
 	circuitJSON, err := json.Marshal(k)
 	req, err := http.NewRequest("POST", "http://localhost:8081/post", bytes.NewBuffer(circuitJSON))
 	if err != nil {
