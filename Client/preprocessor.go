@@ -20,9 +20,11 @@ var mapImports map[string]bool = map[string]bool{
 	"net/http":      true,
 	"encoding/json": true,
 	"io/ioutil":     true,
-	"log":           true,
+	"log":           false,
 	"math/rand":     true,
-	"strconv":       true}
+	"strconv":       false,
+	"os":            false,
+	"time":          false}
 
 //const structBlock string = "\ntype ComID struct {\nCID string `json:\"key\"`\n}\ntype circuit struct {\nO    []bool `json:\"o\"`\nFeed string `json:\"feed\"`\nCID  string `json:\"key\"`\nR    string `json:\"randomness\"`\n}\ntype GarbledCircuit struct {\n\nGarbledValues []byte `json:\"garbledValues\"`\nInWire0       []byte `json:\"inWire0\"`\nInWire1       []byte `json:\"inWire1\"`\nComID\n}\ntype resEval struct {\nRes []byte `json:\"res\"`\nComID\n}\n"
 
